@@ -1,0 +1,3347 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ระบบขออนุมัติเบิกงบก่อนเดินทาง</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=IBM+Plex+Sans+Thai:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  :root{
+    --navy:#0B3C6B;
+    --navy-deep:#082B4E;
+    --blue:#1B6FC4;
+    --blue-light:#4FA3E3;
+    --pale-blue:#EAF3FB;
+    --pale-blue-2:#F5F9FD;
+    --white:#FFFFFF;
+    --ink:#16283B;
+    --muted:#5D7285;
+    --border:#D7E6F5;
+    --success:#2E9E6D;
+    --danger:#D64550;
+    --shadow: 0 4px 18px rgba(11,60,107,0.08);
+    --shadow-soft: 0 2px 8px rgba(11,60,107,0.06);
+    --radius: 14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:'Sarabun',sans-serif;
+    background:linear-gradient(180deg,var(--pale-blue) 0%, var(--pale-blue-2) 320px, #FFFFFF 320px);
+    color:var(--ink);
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,h4{font-family:'IBM Plex Sans Thai','Sarabun',sans-serif; margin:0;}
+  .app{max-width:1180px;margin:0 auto;padding:20px 24px 60px;}
+
+  /* Header */
+  .topbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;padding:18px 4px 22px;}
+  .brand{display:flex;align-items:center;gap:14px;}
+  .brand-icon{width:52px;height:52px;flex:none;}
+  .brand-title{font-size:20px;font-weight:700;color:var(--navy-deep);letter-spacing:.2px;}
+  .brand-sub{font-size:13px;color:var(--muted);margin-top:2px;}
+
+  .tabs{display:flex;gap:6px;background:var(--white);padding:5px;border-radius:12px;box-shadow:var(--shadow-soft);border:1px solid var(--border);}
+  .tab{
+    border:none;background:transparent;padding:10px 20px;border-radius:9px;
+    font-family:inherit;font-size:14.5px;font-weight:600;color:var(--muted);cursor:pointer;
+    transition:all .18s ease;
+  }
+  .tab.active{background:linear-gradient(135deg,var(--navy) 0%, var(--blue) 100%);color:#fff;box-shadow:0 3px 10px rgba(27,111,196,.35);}
+  .tab:not(.active):hover{color:var(--navy);background:var(--pale-blue);}
+
+  .tab-panel{display:none;animation:fadeIn .25s ease;}
+  .tab-panel.active{display:block;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+  /* Cards */
+  .card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-soft);padding:20px 22px;}
+  .card h3{font-size:15px;color:var(--navy-deep);font-weight:600;margin-bottom:14px;}
+
+  /* KPI */
+  .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;}
+  .kpi{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow-soft);position:relative;overflow:hidden;}
+  .kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg,var(--blue-light),var(--blue));}
+  .kpi-label{font-size:12.5px;color:var(--muted);font-weight:500;}
+  .kpi-value{font-size:24px;font-weight:700;color:var(--navy-deep);margin-top:4px;font-variant-numeric:tabular-nums;}
+  .kpi-unit{font-size:12px;color:var(--muted);font-weight:500;}
+
+  /* Filters */
+  .filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;}
+  .chip{
+    border:1px solid var(--border);background:var(--white);color:var(--navy);
+    padding:8px 16px;border-radius:999px;font-size:13.5px;font-weight:600;cursor:pointer;
+    transition:all .15s ease;font-family:inherit;
+  }
+  .chip.active{background:var(--navy);border-color:var(--navy);color:#fff;}
+  .chip:not(.active):hover{background:var(--pale-blue);}
+
+  .charts-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;margin-bottom:16px;}
+  .charts-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px;}
+  .chart-card canvas{max-height:260px;}
+  .charts-grid-3 .chart-card canvas{max-height:210px;}
+
+  .kpi-compare{display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;margin-top:6px;}
+  .kpi-compare.up{color:var(--danger);}
+  .kpi-compare.down{color:var(--success);}
+  .kpi-compare.neutral{color:var(--muted);}
+  .kpi-compare .compare-label{color:var(--muted);font-weight:500;}
+
+  /* Cost breakdown donut (pure CSS, no external chart library needed) */
+  .donut-wrap{display:flex;align-items:center;justify-content:center;padding:6px 0 14px;}
+  .donut-ring{width:132px;height:132px;border-radius:50%;position:relative;flex:none;}
+  .donut-center{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:74px;height:74px;border-radius:50%;background:#fff;
+    display:flex;align-items:center;justify-content:center;text-align:center;
+    box-shadow:inset 0 0 0 1px var(--border);
+  }
+  .donut-center-inner{font-size:11px;color:var(--muted);font-weight:600;line-height:1.5;}
+  .donut-legend{display:flex;flex-direction:column;gap:9px;}
+  .donut-legend-row{display:flex;align-items:center;gap:8px;font-size:12.5px;}
+  .donut-dot{width:10px;height:10px;border-radius:3px;flex:none;}
+  .donut-legend-label{color:var(--ink);font-weight:500;flex:1;}
+  .donut-legend-val{color:var(--navy-deep);font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .donut-legend-pct{color:var(--muted);font-size:11.5px;width:42px;text-align:right;flex:none;}
+  .donut-empty{color:var(--muted);font-size:13px;text-align:center;padding:30px 0;}
+
+  /* Top-5 ranked bar lists (pure CSS, no external chart library needed) */
+  .bar-list{display:flex;flex-direction:column;gap:12px;}
+  .bar-list-row .bar-list-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px;}
+  .bar-list-rank{
+    display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;
+    border-radius:5px;background:var(--pale-blue);color:var(--navy);font-size:10.5px;font-weight:700;flex:none;margin-right:6px;
+  }
+  .bar-list-name{font-size:12.5px;color:var(--ink);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;}
+  .bar-list-amount{font-size:12.5px;color:var(--navy-deep);font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;flex:none;}
+  .bar-list-track{background:var(--pale-blue);border-radius:6px;height:9px;overflow:hidden;}
+  .bar-list-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--blue-light),var(--blue));}
+
+  /* Trend bar chart (pure CSS, no external chart library needed) */
+  .vbar-chart{display:flex;align-items:flex-end;gap:14px;height:230px;padding:10px 6px 0;overflow-x:auto;}
+  .vbar-col{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:none;width:46px;height:100%;}
+  .vbar-value{font-size:10.5px;color:var(--navy-deep);font-weight:700;margin-bottom:5px;white-space:nowrap;}
+  .vbar-fill{width:24px;min-height:2px;background:linear-gradient(180deg,var(--blue-light),var(--blue));border-radius:6px 6px 2px 2px;}
+  .vbar-label{font-size:10.5px;color:var(--muted);margin-top:7px;white-space:nowrap;}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  thead th{text-align:left;color:var(--muted);font-weight:600;font-size:12.5px;text-transform:none;padding:8px 10px;border-bottom:2px solid var(--pale-blue);white-space:nowrap;}
+  tbody td{padding:9px 10px;border-bottom:1px solid var(--pale-blue);color:var(--ink);white-space:nowrap;}
+  tbody tr:hover{background:var(--pale-blue-2);}
+  .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;background:var(--pale-blue);color:var(--navy);}
+  .detail-btn{border:1.5px solid var(--border);background:var(--pale-blue-2);color:var(--navy);cursor:pointer;font-size:12.5px;font-weight:600;padding:6px 12px;border-radius:8px;white-space:nowrap;transition:all .15s ease;}
+  .detail-btn:hover{background:var(--pale-blue);border-color:var(--blue);}
+  .detail-btn:disabled{opacity:.6;cursor:default;}
+  .cancel-btn{border:1.5px solid var(--danger);background:#fff;color:var(--danger);cursor:pointer;font-size:12.5px;font-weight:600;padding:6px 12px;border-radius:8px;white-space:nowrap;transition:all .15s ease;margin-left:6px;}
+  .cancel-btn:hover{background:#FBE9EA;}
+  .cancel-btn:disabled{opacity:.6;cursor:default;}
+  .refill-btn{border:1.5px solid var(--blue);background:#fff;color:var(--blue);cursor:pointer;font-size:12.5px;font-weight:600;padding:6px 12px;border-radius:8px;white-space:nowrap;transition:all .15s ease;margin-left:6px;}
+  .refill-btn:hover{background:var(--pale-blue);}
+  tr.row-cancelled{background:var(--pale-blue-2);}
+  tr.row-cancelled td{color:var(--muted);}
+  .badge-cancelled{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;background:#FBE4E6;color:var(--danger);}
+  .badge-pending{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;background:#FFF4DE;color:#B7791F;}
+  .badge-approved{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;background:#E3F6E8;color:#1F8A4C;}
+  .badge-rejected{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;background:#FDEBEC;color:#C0392B;}
+  .approve-btn{border:1.5px solid #1F8A4C;background:#fff;color:#1F8A4C;cursor:pointer;font-size:12.5px;font-weight:600;padding:6px 12px;border-radius:8px;white-space:nowrap;transition:all .15s ease;margin-left:6px;}
+  .approve-btn:hover{background:#E3F6E8;}
+  .approve-btn:disabled{opacity:.6;cursor:default;}
+  .reject-btn{border:1.5px solid var(--danger);background:#fff;color:var(--danger);cursor:pointer;font-size:12.5px;font-weight:600;padding:6px 12px;border-radius:8px;white-space:nowrap;transition:all .15s ease;margin-left:6px;}
+  .reject-btn:hover{background:#FDEBEC;}
+  .reject-btn:disabled{opacity:.6;cursor:default;}
+  .kpi.kpi-clickable{cursor:pointer;transition:transform .12s ease, box-shadow .12s ease;}
+  .kpi.kpi-clickable:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(11,60,107,.12);}
+
+  .detail-overlay{position:fixed;inset:0;background:rgba(11,60,107,0.45);display:flex;align-items:flex-start;justify-content:center;padding:30px 16px;z-index:999;overflow:auto;}
+  .detail-overlay.hidden{display:none;}
+  .detail-box{background:#fff;border-radius:14px;max-width:820px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.25);overflow:hidden;}
+  .detail-box-header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);flex-wrap:wrap;}
+  .detail-box-body{padding:20px 24px;max-height:75vh;overflow:auto;}
+  .detail-close-btn{border:none;background:var(--pale-blue);color:var(--navy);border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer;font-family:inherit;font-size:13px;}
+  .detail-close-btn:hover{background:var(--border);}
+  .empty-note{color:var(--muted);font-size:13.5px;padding:20px 4px;text-align:center;}
+
+  /* Form layout */
+  .form-grid{display:grid;grid-template-columns:1.55fr 1fr;gap:20px;align-items:start;}
+  .form-section{margin-bottom:16px;}
+  .section-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+  .section-num{
+    width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--navy),var(--blue));
+    color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none;
+  }
+  .section-title{font-size:15.5px;font-weight:700;color:var(--navy-deep);letter-spacing:.1px;}
+  .field-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
+  .field{display:flex;flex-direction:column;gap:7px;}
+  .field.full{grid-column:1/-1;}
+  label{font-size:13.5px;font-weight:600;color:var(--ink);line-height:1.4;}
+  input,select{
+    font-family:inherit;font-size:14.5px;color:var(--ink);line-height:1.5;
+    border:1.5px solid var(--border);border-radius:9px;padding:10px 12px;background:#fff;
+    transition:border-color .15s ease, box-shadow .15s ease;width:100%;
+  }
+  input:focus,select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(27,111,196,.14);}
+  input[readonly]{background:var(--pale-blue-2);color:var(--navy-deep);font-weight:600;}
+  input:disabled, select:disabled, textarea:disabled{background:var(--pale-blue-2);color:var(--navy-deep);opacity:1;cursor:not-allowed;}
+  .view-only-banner{
+    display:none;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+    background:linear-gradient(135deg,#FFF6E5,#FFEFCF);border:1px solid #F4D98A;color:#7A5B00;
+    border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;font-size:11px;font-weight:600;
+  }
+  .hint{font-size:11.5px;color:var(--muted);}
+
+  /* DC/Shop autocomplete (replaces native <datalist>, which mobile browsers often fail to
+     show as a tappable list — see setupDcAutocomplete()) */
+  .dc-autocomplete{position:relative;}
+  .dc-autocomplete-list{
+    display:none;position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:40;
+    background:#fff;border:1.5px solid var(--border);border-radius:9px;
+    box-shadow:0 10px 26px rgba(11,60,107,.16);max-height:240px;overflow-y:auto;
+    -webkit-overflow-scrolling:touch;touch-action:pan-y;
+  }
+  .dc-autocomplete-list.open{display:block;}
+  .dc-autocomplete-item{padding:11px 13px;font-size:14.5px;color:var(--ink);cursor:pointer;border-bottom:1px solid var(--pale-blue-2);}
+  .dc-autocomplete-item:last-child{border-bottom:none;}
+  .dc-autocomplete-item:hover,.dc-autocomplete-item.active{background:var(--pale-blue-2);}
+  .dc-autocomplete-empty{padding:11px 13px;font-size:13px;color:var(--muted);}
+
+  /* Date field with picker */
+  .date-field{display:flex;gap:6px;}
+  .date-field input[type=text]{flex:1;}
+  .date-icon-btn{
+    border:1.5px solid var(--border);background:#fff;border-radius:9px;padding:0 13px;cursor:pointer;
+    font-size:16px;color:var(--navy);flex:none;
+  }
+  .date-icon-btn:hover{border-color:var(--blue);background:var(--pale-blue);}
+  .date-hidden{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;}
+
+  /* ---- Custom Thai (Buddhist-era) date picker popup ---- */
+  .thai-datepicker-popup{
+    position:absolute; z-index:1000; background:var(--white); border:1px solid var(--border);
+    border-radius:12px; box-shadow:0 10px 28px rgba(8,43,78,.20); padding:14px; width:280px;
+    font-family:inherit;
+  }
+  .tdp-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:6px;}
+  .tdp-nav-btn{border:none;background:var(--pale-blue);color:var(--navy);width:26px;height:26px;min-width:26px;
+    border-radius:8px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;padding:0;}
+  .tdp-nav-btn:hover{background:var(--border);}
+  .tdp-month-year{display:flex;gap:5px;flex:1;justify-content:center;}
+  .tdp-select{border:1.5px solid var(--border);border-radius:8px;padding:4px 4px;font-size:12.5px;
+    font-family:inherit;color:var(--navy-deep);font-weight:600;background:#fff;max-width:110px;}
+  .tdp-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;}
+  .tdp-dow{font-size:11px;color:var(--muted);font-weight:600;padding:4px 0 6px;}
+  .tdp-day{font-size:13px;padding:6px 0;border-radius:8px;cursor:pointer;color:var(--ink);}
+  .tdp-day:hover{background:var(--pale-blue);}
+  .tdp-day.tdp-muted{color:#C3D3E2;}
+  .tdp-day.tdp-today{border:1.5px solid var(--blue);}
+  .tdp-day.tdp-selected{background:var(--navy);color:#fff;font-weight:700;}
+  .tdp-footer{display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid var(--pale-blue);}
+  .tdp-today-btn,.tdp-clear-btn{border:none;background:none;color:var(--blue);font-size:12.5px;font-weight:600;
+    cursor:pointer;font-family:inherit;padding:2px 0;}
+  .tdp-today-btn:hover,.tdp-clear-btn:hover{text-decoration:underline;}
+
+  /* Helper employee list */
+  .helper-list{display:flex;flex-direction:column;gap:10px;margin-top:10px;}
+  .helper-item{display:flex;align-items:flex-start;gap:10px;background:var(--pale-blue-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;}
+  .helper-item .idx{
+    width:26px;height:26px;border-radius:50%;background:var(--pale-blue);color:var(--navy);
+    font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none;margin-top:2px;
+  }
+  .helper-item .helper-fields{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:8px;flex:1;}
+  .helper-item .helper-fields input{font-size:13.5px;padding:8px 10px;}
+  @media (max-width:600px){ .helper-item .helper-fields{grid-template-columns:1fr;} }
+
+  .trip-type-row{display:flex;flex-wrap:wrap;gap:10px;}
+  .trip-type-btn{
+    font-family:inherit;border:1.5px solid var(--border);background:#fff;color:var(--navy);
+    padding:11px 18px;border-radius:10px;font-size:13.5px;font-weight:600;cursor:pointer;
+    transition:all .15s ease;flex:1;min-width:160px;display:flex;align-items:center;justify-content:center;gap:9px;
+  }
+  .trip-type-btn:hover{border-color:var(--blue);background:var(--pale-blue);}
+  .trip-type-btn.active{background:linear-gradient(135deg,var(--navy) 0%, var(--blue) 100%);border-color:var(--blue);color:#fff;box-shadow:0 3px 10px rgba(27,111,196,.3);}
+  .trip-type-radio{
+    width:16px;height:16px;flex:0 0 16px;border-radius:50%;border:2px solid var(--border);
+    background:#fff;position:relative;transition:all .15s ease;
+  }
+  .trip-type-btn:hover .trip-type-radio{border-color:var(--blue);}
+  .trip-type-btn.active .trip-type-radio{border-color:#fff;background:transparent;}
+  .trip-type-btn.active .trip-type-radio::after{
+    content:'';position:absolute;inset:3px;border-radius:50%;background:#fff;
+  }
+
+  .choice-btn-col{display:flex;flex-direction:column;gap:12px;max-width:340px;margin:0 auto;}
+
+  .radio-row{display:flex;flex-wrap:wrap;gap:8px;}
+  .radio-chip{
+    border:1.5px solid var(--border);border-radius:9px;padding:9px 12px;font-size:13.5px;
+    cursor:pointer;display:flex;align-items:center;gap:7px;background:#fff;transition:all .15s ease;
+  }
+  .radio-chip input{margin:0;width:15px;height:15px;accent-color:var(--blue);}
+  .radio-chip.checked{border-color:var(--blue);background:var(--pale-blue);}
+
+  .subrow{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px dashed var(--border);font-size:13.5px;}
+  .subrow:last-child{border-bottom:none;}
+  .subrow span:first-child{color:var(--muted);font-weight:600;}
+  .subrow span:last-child{font-weight:700;color:var(--navy-deep);font-variant-numeric:tabular-nums;}
+
+  .grand-total-box{
+    margin-top:6px;padding:12px 18px;border-radius:var(--radius);
+    background:linear-gradient(135deg,var(--navy) 0%, var(--blue) 100%);color:#fff;
+    display:flex;justify-content:space-between;align-items:center;box-shadow:var(--shadow);
+  }
+  .grand-total-box .lbl{font-size:12.5px;opacity:.9;font-weight:500;}
+  .grand-total-box .val{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;}
+
+  .file-preview{display:flex;align-items:center;gap:10px;margin-top:8px;min-height:0;}
+  .file-preview:empty{margin-top:0;}
+  .file-preview img{width:56px;height:56px;object-fit:cover;border-radius:8px;border:1.5px solid var(--border);}
+  .file-preview .file-chip{display:flex;align-items:center;gap:8px;background:var(--pale-blue);border-radius:9px;padding:6px 10px;font-size:12.5px;color:var(--navy-deep);font-weight:600;}
+  .file-preview .file-remove{border:none;background:none;color:var(--danger);cursor:pointer;font-size:12px;font-weight:700;}
+
+  /* Summary sidebar */
+  .summary-card{position:sticky;top:16px;}
+  .summary-row{display:flex;justify-content:space-between;align-items:baseline;padding:9px 0;border-bottom:1px dashed var(--border);font-size:13.5px;}
+  .summary-row:last-of-type{border-bottom:none;}
+  .summary-row span:first-child{color:var(--muted);}
+  .summary-row span:last-child{font-weight:600;font-variant-numeric:tabular-nums;}
+  .summary-total{
+    margin-top:12px;padding:16px;border-radius:12px;
+    background:linear-gradient(135deg,var(--navy) 0%, var(--blue) 100%);color:#fff;
+  }
+  .summary-total .lbl{font-size:12.5px;opacity:.85;font-weight:500;}
+  .summary-total .val{font-size:26px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums;}
+  .summary-total.compact{padding:10px 14px;}
+  .summary-total.compact .val{font-size:16px;}
+  .summary-total.emphasize{padding:22px 20px;box-shadow:var(--shadow);}
+  .summary-total.emphasize .lbl{font-size:13.5px;}
+  .summary-total.emphasize .val{font-size:34px;}
+
+  .btn{
+    font-family:inherit;font-size:14px;font-weight:600;padding:11px 18px;border-radius:10px;
+    border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;
+    transition:transform .12s ease, box-shadow .12s ease;width:100%;
+  }
+  .btn:active{transform:scale(.98);}
+  .btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:none;transform:none;}
+  .btn:disabled:active{transform:none;}
+  .btn-primary{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;box-shadow:0 3px 10px rgba(27,111,196,.3);}
+  .btn-outline{background:#fff;color:var(--navy);border:1.5px solid var(--border);}
+  .btn-outline:hover{border-color:var(--blue);}
+  .btn-ghost{background:var(--pale-blue);color:var(--navy);}
+  .btn-row{display:flex;flex-direction:column;gap:10px;margin-top:14px;}
+
+  #toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--navy-deep);color:#fff;padding:12px 22px;border-radius:10px;font-size:14px;font-weight:500;
+    box-shadow:0 8px 24px rgba(0,0,0,.2);opacity:0;pointer-events:none;transition:all .25s ease;z-index:999;
+  }
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  /* ---- Custom app dialogs (replace native prompt/confirm/alert) ----
+     Native browser dialogs can be permanently silenced by the user via the browser's own
+     "Don't allow this site to prompt you again" checkbox — after that, prompt()/confirm()
+     calls stop showing anything and just resolve immediately, so buttons that depend on them
+     (like the admin unlock button) look "broken" with no way to recover except clearing that
+     browser setting. Using our own in-page dialog avoids that entirely. */
+  .app-dialog-overlay{
+    position:fixed;inset:0;background:rgba(11,60,107,0.45);display:flex;align-items:center;
+    justify-content:center;padding:20px;z-index:1200;
+  }
+  .app-dialog-overlay.hidden{display:none;}
+  .app-dialog-box{
+    background:#fff;border-radius:16px;max-width:400px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.28);
+    padding:22px 22px 20px;
+  }
+  .app-dialog-title{font-size:16px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;font-family:'IBM Plex Sans Thai','Sarabun',sans-serif;}
+  .app-dialog-msg{font-size:13.5px;color:var(--muted);line-height:1.6;white-space:pre-line;margin-bottom:14px;}
+  .app-dialog-input{
+    font-family:inherit;font-size:14px;color:var(--ink);border:1.5px solid var(--border);border-radius:9px;
+    padding:9px 11px;background:#fff;width:100%;margin-bottom:16px;
+  }
+  .app-dialog-input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(27,111,196,.14);}
+  .app-dialog-btnrow{display:flex;gap:10px;}
+  .app-dialog-btnrow .btn{width:auto;flex:1;padding:10px 16px;font-size:13.5px;}
+
+  .data-note{display:flex;gap:8px;align-items:flex-start;background:var(--pale-blue);border:1px solid var(--border);border-radius:10px;padding:10px 13px;font-size:12.5px;color:var(--navy-deep);margin-bottom:16px;}
+
+  /* Success panel */
+  .success-wrap{max-width:520px;margin:40px auto;text-align:center;display:flex;flex-direction:column;align-items:center;}
+  .success-icon{
+    width:76px;height:76px;border-radius:50%;background:linear-gradient(135deg,var(--success),#4FBE8C);
+    color:#fff;font-size:38px;font-weight:700;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 8px 22px rgba(46,158,109,.3);margin-bottom:18px;
+    animation:successPop .35s cubic-bezier(.34,1.56,.64,1);
+  }
+  @keyframes successPop{from{transform:scale(.4);opacity:0;}to{transform:scale(1);opacity:1;}}
+  .success-title{font-size:22px;font-weight:700;color:var(--navy-deep);margin-bottom:6px;}
+  .success-sub{font-size:14px;color:var(--muted);margin:0 0 22px;}
+  .success-card{
+    width:100%;background:var(--white);border:1px solid var(--border);border-radius:var(--radius);
+    box-shadow:var(--shadow-soft);padding:18px 20px;margin-bottom:24px;text-align:left;
+  }
+  .success-card .srow{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--border);font-size:13.5px;}
+  .success-card .srow:last-child{border-bottom:none;}
+  .success-card .srow span:first-child{color:var(--muted);font-weight:600;}
+  .success-card .srow span:last-child{font-weight:700;color:var(--navy-deep);font-variant-numeric:tabular-nums;text-align:right;}
+  .success-btn-row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;}
+  @media (max-width:500px){ .success-btn-row .btn{width:100%;} }
+
+  @media (max-width:880px){
+    .form-grid{grid-template-columns:1fr;}
+    .charts-grid{grid-template-columns:1fr;}
+    .charts-grid-3{grid-template-columns:1fr;}
+    .kpi-grid{grid-template-columns:1fr 1fr;}
+    .field-grid{grid-template-columns:1fr;}
+    .summary-card{position:static;}
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand" id="brandHomeBtn" style="cursor:pointer;" title="กลับหน้าแรก">
+      <svg class="brand-icon" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="26" cy="26" r="25" fill="#EAF3FB" stroke="#D7E6F5"/>
+        <circle cx="14" cy="34" r="3.2" fill="#0B3C6B"/>
+        <circle cx="38" cy="18" r="3.2" fill="#1B6FC4"/>
+        <path d="M14 34 C 20 22, 30 30, 38 18" stroke="#4FA3E3" stroke-width="2" stroke-dasharray="3 4" fill="none" stroke-linecap="round"/>
+        <path d="M38 12 L44 18 L38 24" stroke="#1B6FC4" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div>
+        <div class="brand-title">ระบบขออนุมัติเบิกงบก่อนเดินทาง</div>
+        <div class="brand-sub">โดยรถส่วนบุคคล</div>
+      </div>
+    </div>
+    <button class="tab" data-tab="overview" id="overviewTabBtn" style="display:none;">ภาพรวม</button>
+    <button type="button" id="adminUnlockBtn" title="สำหรับเจ้าของแดชบอร์ด/ผู้ดูแล" style="border:1px solid var(--border);background:var(--white);color:var(--muted);font-size:12px;font-weight:600;padding:8px 12px;border-radius:9px;cursor:pointer;font-family:inherit;">🔒 สำหรับผู้ดูแล</button>
+  </header>
+
+  <!-- ============ HOME / LANDING TAB ============ -->
+  <section id="tab-home" class="tab-panel active">
+    <div style="max-width:520px;margin:70px auto 40px;text-align:center;">
+      <svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:64px;height:64px;margin:0 auto 22px;display:block;">
+        <circle cx="26" cy="26" r="25" fill="#EAF3FB" stroke="#D7E6F5"/>
+        <circle cx="14" cy="34" r="3.2" fill="#0B3C6B"/>
+        <circle cx="38" cy="18" r="3.2" fill="#1B6FC4"/>
+        <path d="M14 34 C 20 22, 30 30, 38 18" stroke="#4FA3E3" stroke-width="2" stroke-dasharray="3 4" fill="none" stroke-linecap="round"/>
+        <path d="M38 12 L44 18 L38 24" stroke="#1B6FC4" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <h1 style="font-size:25px;color:var(--navy-deep);font-weight:700;margin-bottom:10px;">ระบบขออนุมัติเบิกงบก่อนเดินทาง</h1>
+      <p style="color:var(--muted);font-size:14.5px;line-height:1.7;margin-bottom:30px;">กรอกแบบฟอร์มขออนุมัติเบิกงบประมาณก่อนออกเดินทางไปปฏิบัติงาน</p>
+      <button type="button" class="btn btn-primary" id="homeFormBtn" style="width:auto;padding:14px 40px;font-size:15.5px;margin:0 auto;">📝 กรอกแบบฟอร์ม</button>
+    </div>
+  </section>
+
+  <!-- ============ FORM CHOICE TAB (shown when clicking "กรอกแบบฟอร์ม") ============ -->
+  <section id="tab-formchoice" class="tab-panel">
+    <div id="choiceMainBox" style="max-width:520px;margin:70px auto 40px;text-align:center;">
+      <h1 style="font-size:22px;color:var(--navy-deep);font-weight:700;margin-bottom:10px;">เลือกดำเนินการ</h1>
+      <p style="color:var(--muted);font-size:14.5px;line-height:1.7;margin-bottom:30px;">ต้องการกรอกคำขอใหม่ หรือต้องการยกเลิกคำขอเดิมที่เคยกรอกไว้?</p>
+      <div class="choice-btn-col">
+        <button type="button" class="btn btn-primary" id="choiceNewFormBtn" style="width:auto;padding:14px 24px;font-size:15px;">📝 กรอกแบบฟอร์มใหม่</button>
+        <button type="button" class="btn btn-outline" id="choiceCancelOldBtn" style="width:auto;padding:14px 24px;font-size:15px;">🗑 ยกเลิกแบบฟอร์มเดิม</button>
+      </div>
+    </div>
+
+    <div id="cancelLookupBox" style="max-width:420px;margin:70px auto 40px;display:none;">
+      <div class="card">
+        <h3 style="margin-bottom:14px;">ค้นหาคำขอเดิมด้วยรหัสพนักงาน</h3>
+        <div class="field">
+          <label>รหัสพนักงานที่เคยขออนุมัติ</label>
+          <input type="text" id="cancelLookupCode" placeholder="เช่น EMP0012">
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn btn-primary" id="cancelLookupSearchBtn">🔍 ค้นหาคำขอ</button>
+          <button type="button" class="btn btn-ghost" id="cancelLookupBackBtn">← ย้อนกลับ</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ OVERVIEW TAB ============ -->
+  <section id="tab-overview" class="tab-panel">
+
+    <div class="kpi-grid">
+      <div class="kpi kpi-clickable" id="kpiCountCard" title="คลิกเพื่อดูรายการคำขอทั้งหมดทุกสถานะ">
+        <div class="kpi-label">จำนวนคำขอทั้งหมด</div>
+        <div class="kpi-value" id="kpiCount">0</div>
+        <div class="kpi-unit">รายการ</div>
+        <div id="kpiCountCompare"></div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">ยอดรวมขออนุมัติ</div>
+        <div class="kpi-value" id="kpiSum">0</div>
+        <div class="kpi-unit">บาท</div>
+        <div id="kpiSumCompare"></div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">เฉลี่ยต่อครั้ง</div>
+        <div class="kpi-value" id="kpiAvg">0</div>
+        <div class="kpi-unit">บาท/ครั้ง</div>
+        <div id="kpiAvgCompare"></div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">ระยะทางสะสม</div>
+        <div class="kpi-value" id="kpiDist">0</div>
+        <div class="kpi-unit">กิโลเมตร</div>
+        <div id="kpiDistCompare"></div>
+      </div>
+    </div>
+
+    <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);">
+      <div class="kpi kpi-clickable" id="kpiPendingCard" title="คลิกเพื่อดูรายการที่รออนุมัติ">
+        <div class="kpi-label">จำนวนคำขอใหม่ (รออนุมัติ)</div>
+        <div class="kpi-value" id="kpiPending">0</div>
+        <div class="kpi-unit">รายการ</div>
+      </div>
+      <div class="kpi kpi-clickable" id="kpiApprovedCard" title="คลิกเพื่อดูรายการที่อนุมัติแล้ว">
+        <div class="kpi-label">อนุมัติแล้ว</div>
+        <div class="kpi-value" id="kpiApproved">0</div>
+        <div class="kpi-unit">รายการ</div>
+      </div>
+      <div class="kpi kpi-clickable" id="kpiRejectedCard" title="คลิกเพื่อดูรายการที่ไม่อนุมัติ">
+        <div class="kpi-label">ไม่อนุมัติ</div>
+        <div class="kpi-value" id="kpiRejected">0</div>
+        <div class="kpi-unit">รายการ</div>
+      </div>
+      <div class="kpi kpi-clickable" id="kpiCancelledCard" title="คลิกเพื่อดูรายการที่ถูกยกเลิก">
+        <div class="kpi-label">ยกเลิก</div>
+        <div class="kpi-value" id="kpiCancelled">0</div>
+        <div class="kpi-unit">รายการ</div>
+      </div>
+    </div>
+
+    <div class="filter-row" id="periodFilter">
+      <button class="chip" data-period="day">รายวัน</button>
+      <button class="chip" data-period="week">รายสัปดาห์</button>
+      <button class="chip active" data-period="month">รายเดือน</button>
+      <button class="chip" data-period="year">รายปี</button>
+      <button class="chip" data-period="all">ทั้งหมด</button>
+    </div>
+
+    <div class="charts-grid">
+      <div class="card chart-card">
+        <h3>แนวโน้มยอดเบิกงบ</h3>
+        <div class="vbar-chart" id="trendChartWrap"></div>
+      </div>
+      <div class="card chart-card">
+        <h3>สถิติปลายทางที่เดินทางบ่อย</h3>
+        <div class="bar-list" id="destFreqList"></div>
+      </div>
+    </div>
+
+    <div class="charts-grid-3">
+      <div class="card chart-card">
+        <h3>สัดส่วนต้นทุน</h3>
+        <div class="donut-wrap">
+          <div class="donut-ring" id="costDonutRing">
+            <div class="donut-center"><div class="donut-center-inner" id="costDonutCenter">0<br>บาท</div></div>
+          </div>
+        </div>
+        <div class="donut-legend" id="costDonutLegend"></div>
+      </div>
+      <div class="card chart-card">
+        <h3>Top 5 ผู้ขออนุมัติ (ยอดสูงสุด)</h3>
+        <div class="bar-list" id="topRequestersList"></div>
+      </div>
+      <div class="card chart-card">
+        <h3>Top 5 ปลายทาง (ยอดสูงสุด)</h3>
+        <div class="bar-list" id="topDestValueList"></div>
+      </div>
+    </div>
+
+    <div style="text-align:center;font-size:12.5px;color:var(--muted);padding:10px 4px 0;">
+      หมายเหตุ: การเดินทางโดยรถส่วนบุคคล หากเกิดความเสียหายกับรถ บริษัทไม่รับผิดชอบทุกกรณี
+    </div>
+  </section>
+
+  <!-- ============ REQUEST LIST TAB (reached only via the KPI cards on ภาพรวม) ============ -->
+  <section id="tab-requestlist" class="tab-panel">
+    <div class="card table-card" id="requestListCard" style="margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-outline" id="requestListBackBtn" style="width:auto;padding:8px 14px;font-size:13px;">← กลับไปหน้าภาพรวม</button>
+          <h3 style="margin:0;" id="requestListTitle">รายการขออนุมัติเบิกงบก่อนเดินทาง</h3>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+          <label id="showCancelledToggleRow" style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);font-weight:600;cursor:pointer;">
+            <input type="checkbox" id="showCancelledToggle" style="width:auto;">แสดงรายการที่ยกเลิกด้วย
+          </label>
+          <button class="btn btn-outline" style="width:auto;padding:8px 14px;font-size:13px;" id="exportAllExcelBtn">📊 ส่งออกข้อมูลทั้งหมด (Excel)</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table id="recentTable">
+          <thead>
+            <tr>
+              <th>วันที่กรอกข้อมูล</th><th>วันที่เดินทาง</th><th>ผู้ขออนุมัติ</th><th>รหัส</th><th>จาก</th><th>ถึง</th>
+              <th>ระยะทาง (กม.)</th><th>ยอดรวม (บาท)</th><th>สถานะ</th><th>จัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="recentTableBody"></tbody>
+        </table>
+      </div>
+      <div id="emptyNote" class="empty-note" style="display:none;">ยังไม่มีข้อมูลการเบิกงบในช่วงเวลานี้</div>
+    </div>
+  </section>
+
+  <!-- ============ FORM TAB ============ -->
+  <section id="tab-form" class="tab-panel">
+    <div id="viewOnlyBanner" class="view-only-banner">
+      <span>ไม่สามารถแก้ไขข้อมูลได้ <span id="viewOnlyStatusBadge"></span></span>
+      <button type="button" class="btn btn-outline" id="viewOnlyBackBtn" style="width:auto;padding:8px 16px;">← กลับไปหน้าภาพรวม</button>
+    </div>
+    <div class="form-grid">
+      <div>
+
+        <!-- 1 -->
+        <div class="card form-section">
+          <div class="section-head"><div class="section-num">1</div><div class="section-title">วันที่กรอกข้อมูล และข้อมูลผู้ขออนุมัติ</div></div>
+          <div class="field-grid">
+            <div class="field">
+              <label>วันที่กรอกข้อมูล (ว/ด/ป)</label>
+              <div class="date-field">
+                <input type="text" id="fillDateText" readonly>
+                <input type="date" id="fillDate" class="date-hidden">
+              </div>
+              <span class="hint">ระบบตั้งค่าเป็นวันที่ปัจจุบันโดยอัตโนมัติ ไม่สามารถแก้ไขได้</span>
+            </div>
+            <div class="field">
+              <label>คำนำหน้าชื่อ</label>
+              <select id="empPrefix">
+                <option value="นาย">นาย</option>
+                <option value="นาง">นาง</option>
+                <option value="นางสาว">นางสาว</option>
+              </select>
+            </div>
+            <div class="field"><label>ชื่อพนักงาน</label><input type="text" id="empName" placeholder="ชื่อ-นามสกุล"></div>
+            <div class="field"><label>รหัสพนักงาน</label><input type="text" id="empCode" placeholder="เช่น EMP0012"></div>
+            <div class="field"><label>ตำแหน่ง</label><input type="text" id="position" placeholder="ตำแหน่งงาน"></div>
+          </div>
+        </div>
+
+        <!-- 2 -->
+        <div class="card form-section">
+          <div class="section-head"><div class="section-num">2</div><div class="section-title">จำนวนพนักงานเดินทางรวม</div></div>
+          <div class="field">
+            <label>จำนวนพนักงานเดินทางรวม (คน)</label>
+            <input type="number" id="helperCount" min="1" value="1">
+            <span class="hint">นับรวมพนักงานผู้ขออนุมัติในข้อ 1 ด้วย 1 คน — หากมีมากกว่า 1 คน ระบบจะแสดงช่องกรอกชื่อ / รหัส / ตำแหน่ง ของพนักงานที่เดินทางร่วมเพิ่มเติมโดยอัตโนมัติ</span>
+          </div>
+          <div class="helper-list" id="helperNamesList"></div>
+        </div>
+
+        <!-- 3 -->
+        <div class="card form-section">
+          <div class="section-head"><div class="section-num">3</div><div class="section-title">วัตถุประสงค์การเดินทาง</div></div>
+          <div class="field full">
+            <select id="purpose">
+              <option value="ช่วยเหลืองานต่าง DC">ช่วยเหลืองานต่าง DC</option>
+              <option value="ทดแทนกำลังคนในกรณีพนักงานขาด หรือลาหยุด">ทดแทนกำลังคนในกรณีพนักงานขาด หรือลาหยุด</option>
+              <option value="เปิด DC/DP ใหม่ หรือย้ายพื้นที่">เปิด DC/DP ใหม่ หรือย้ายพื้นที่</option>
+              <option value="ช่วยดำเนินงานตามแผนงานของบริษัท">ช่วยดำเนินงานตามแผนงานของบริษัท</option>
+              <option value="ฝึกอบรมและถ่ายทอดวิธีการทำงานให้กับพนักงาน">ฝึกอบรมและถ่ายทอดวิธีการทำงานให้กับพนักงาน</option>
+              <option value="ช่วยเหลืองานที่ Shop">ช่วยเหลืองานที่ Shop</option>
+              <option value="อื่น ๆ">อื่น ๆ</option>
+            </select>
+            <input type="text" id="purposeOther" placeholder="ระบุวัตถุประสงค์อื่น ๆ" style="margin-top:8px;display:none;">
+          </div>
+        </div>
+
+        <!-- 4 -->
+        <div class="card form-section">
+          <div class="section-head"><div class="section-num">4</div><div class="section-title">รูปแบบการเดินทาง</div></div>
+          <div class="field full">
+            <div class="trip-type-row" id="tripTypeRow">
+              <button type="button" class="trip-type-btn" data-trip="oneday"><span class="trip-type-radio"></span>ไป-กลับ (ไม่ค้างคืน)</button>
+              <button type="button" class="trip-type-btn active" data-trip="overnight"><span class="trip-type-radio"></span>ค้างคืน</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5 -->
+        <div class="card form-section">
+          <div class="section-head"><div class="section-num">5</div><div class="section-title">กำหนดการช่วยงาน</div></div>
+          <div class="field-grid">
+            <div class="field">
+              <label>วันที่เดินทางไป (ว/ด/ป)</label>
+              <div class="date-field">
+                <input type="text" id="departDateText" placeholder="วว/ดด/ปปปป">
+                <button type="button" class="date-icon-btn" data-target="departDate">📅</button>
+                <input type="date" id="departDate" class="date-hidden">
+              </div>
+            </div>
+            <div class="field">
+              <label>วันที่เดินทางกลับ (ว/ด/ป)</label>
+              <div class="date-field">
+                <input type="text" id="returnDateText" placeholder="วว/ดด/ปปปป">
+                <button type="button" class="date-icon-btn" data-target="returnDate">📅</button>
+                <input type="date" id="returnDate" class="date-hidden">
+              </div>
+            </div>
+            <div class="field full"><label>จำนวนวันที่ทำงาน (คำนวณอัตโนมัติ)</label><input type="text" id="workDays" readonly value="0 วัน"></div>
+          </div>
+        </div>
+
+        <!-- 5 -->
+        <div class="card form-section">
+          <div class="section-head"><div class="section-num">6</div><div class="section-title">ประเภทรถ และข้อมูลรถ</div></div>
+          <div class="field-grid">
+            <div class="field full">
+              <label>ประเภทรถ</label>
+              <select id="vehicleType">
+                <option value="รถยนต์ (รถน้ำมัน)">รถยนต์ (รถน้ำมัน)</option>
+                <option value="รถยนต์ (รถ EV)">รถยนต์ (รถ EV)</option>
+                <option value="รถจักรยานยนต์">รถจักรยานยนต์</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>ทะเบียนรถ</label>
+              <input type="text" id="vehiclePlate" placeholder="เช่น กข 1234 กรุงเทพมหานคร">
+            </div>
+            <div class="field">
+              <label>ยี่ห้อรถ</label>
+              <input type="text" id="vehicleBrand" placeholder="เช่น Toyota, Honda">
+            </div>
+          </div>
+        </div>
+
+        <!-- 6 -->
+        <div class="card form-section">
+          <div class="section-head"><div class="section-num">7</div><div class="section-title">จุดเริ่มต้น และจุดปลายทาง</div></div>
+          <div class="field-grid">
+            <div class="field">
+              <label>จุดเริ่มต้น</label>
+              <div class="dc-autocomplete">
+                <input type="text" id="startPoint" autocomplete="off" placeholder="พิมพ์หรือเลือกจากรายชื่อ DC/Shop">
+                <div class="dc-autocomplete-list" id="startPointList"></div>
+              </div>
+            </div>
+            <div class="field">
+              <label>จุดปลายทาง</label>
+              <div class="dc-autocomplete">
+                <input type="text" id="endPoint" autocomplete="off" placeholder="พิมพ์หรือเลือกจากรายชื่อ DC/Shop">
+                <div class="dc-autocomplete-list" id="endPointList"></div>
+              </div>
+            </div>
+          </div>
+          <span class="hint" id="dcListNote">* รายชื่อ DC และ Shop ทั้งหมด 115 แห่ง อ้างอิงจากไฟล์รายชื่อ DC ที่แนบ — สามารถพิมพ์ชื่ออื่นเองได้เช่นกัน แตะที่ช่องเพื่อดูรายชื่อทั้งหมด หรือพิมพ์เพื่อค้นหา</span>
+        </div>
+
+        <!-- 7 -->
+        <div class="card form-section">
+          <div class="section-head"><div class="section-num">8</div><div class="section-title">ระยะทางตามระบบ GPS</div></div>
+          <div class="field">
+            <label>ระยะทางไป (เที่ยวเดียว) (กิโลเมตร)</label>
+            <input type="number" id="distanceKm" min="0" step="0.1" placeholder="กรอกระยะทางขาไปจาก GPS / Google Maps">
+            <span class="hint">กรอกระยะทางขาไปเที่ยวเดียวตามที่ระบบ GPS แสดง ระบบจะคูณระยะทางไป-กลับ (x2) ให้อัตโนมัติ</span>
+          </div>
+          <div class="field" style="margin-top:12px;">
+            <label>ระยะทางรวม ไป-กลับ (คำนวณอัตโนมัติ)</label>
+            <input type="text" id="distanceRoundTrip" readonly value="0.00 กม.">
+          </div>
+        </div>
+
+        <!-- 8 -->
+        <div class="card form-section">
+          <div class="section-head"><div class="section-num">9</div><div class="section-title">ค่าน้ำมัน</div></div>
+          <div class="field"><label>ค่าน้ำมัน (บาท/กิโลเมตร)</label><input type="text" id="fuelRate" readonly value="4.00"></div>
+          <span class="hint">อัตราจะเปลี่ยนตามประเภทรถที่เลือกในข้อ 5 โดยอัตโนมัติ · รถยนต์ (รถน้ำมัน) = 4.00 บาท/กม. · รถยนต์ (รถ EV) = 2.50 บาท/กม. · รถจักรยานยนต์ = 1.00 บาท/กม.</span>
+        </div>
+
+        <!-- 9 -->
+        <div class="card form-section">
+          <div class="section-head"><div class="section-num">10</div><div class="section-title">รวมค่าเดินทาง</div></div>
+          <div class="field"><label>ระยะทางไป-กลับ (กม.) × ค่าน้ำมัน (คำนวณอัตโนมัติ)</label><input type="text" id="travelCost" readonly value="0.00 บาท"></div>
+        </div>
+
+        <!-- 10-12 ค่าใช้จ่าย -->
+        <div class="card form-section">
+          <div class="section-head"><div class="section-num">11</div><div class="section-title">ค่าใช้จ่าย</div></div>
+
+          <div style="margin-bottom:16px;">
+            <div class="subrow"><span>1. ค่าเดินทาง (ระยะทาง × ค่าน้ำมัน)</span><span id="echoTravelCost">0.00 บาท</span></div>
+          </div>
+
+          <div style="margin-bottom:16px;" id="accomSection">
+            <div class="section-head" style="margin-bottom:10px;"><div class="section-num">12</div><div class="section-title" style="font-size:14px;">ค่าที่พัก (ตามสวัสดิการ)</div></div>
+            <div class="field-grid">
+              <div class="field"><label>จำนวนคืนที่พัก</label><input type="number" id="accomNights" min="0" value="0"></div>
+              <div class="field"><label>จำนวนห้องพัก</label><input type="number" id="accomRoomCount" min="1" value="1"></div>
+            </div>
+            <div class="helper-list" id="accomList" style="margin-top:12px;"></div>
+            <div class="field full" style="margin-top:12px;"><label>รวมค่าที่พัก (คำนวณอัตโนมัติ)</label><input type="text" id="accomCost" readonly value="0.00 บาท"></div>
+            <span class="hint">รวมค่าที่พัก = จำนวนคืน × Σ(อัตราค่าที่พักของแต่ละห้อง) · อัตรา: ผู้จัดการ LV.10 กทม./ปริมณฑล = 1,000 บาท · LV.10 พื้นที่อื่น และ LV.9 ลงมา (ทุกพื้นที่) = 800 บาท</span>
+          </div>
+
+          <div id="perDiemSection">
+            <div class="section-head" style="margin-bottom:10px;"><div class="section-num">13</div><div class="section-title" style="font-size:14px;">ค่าเบี้ยเลี้ยง</div></div>
+            <div class="field">
+              <label>จำนวนวันเบิกเบี้ยเลี้ยง (ต่อคน)</label>
+              <input type="number" id="perDiemDays" min="0" value="0">
+            </div>
+            <span class="hint">หากจำนวนพนักงานเดินทางรวม (ข้อ 2) มากกว่า 1 คน ระบบจะแสดงช่องให้เลือกระดับตำแหน่งและพื้นที่ปฏิบัติงานของแต่ละคนแยกกันด้านล่างโดยอัตโนมัติ</span>
+            <div class="helper-list" id="perDiemList" style="margin-top:12px;"></div>
+            <div class="field full" style="margin-top:12px;"><label>รวมค่าเบี้ยเลี้ยง (คำนวณอัตโนมัติ)</label><input type="text" id="perDiemCost" readonly value="0.00 บาท"></div>
+            <span class="hint">อัตรา: LV.9 ขึ้นไป กทม./ปริมณฑล และพื้นที่อื่น = 270 บาท · LV.3-8 กทม./ปริมณฑล = 280 บาท, พื้นที่อื่น = 230 บาท</span>
+          </div>
+
+          <div style="margin-top:18px;">
+            <div class="field full">
+              <label>หมายเหตุ</label>
+              <textarea id="remarks" rows="3" placeholder="ระบุหมายเหตุเพิ่มเติม (ถ้ามี)" style="font-family:inherit;font-size:14px;color:var(--ink);border:1.5px solid var(--border);border-radius:9px;padding:9px 11px;background:#fff;width:100%;resize:vertical;"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- 12 -->
+        <div class="card form-section">
+          <div class="section-head"><div class="section-num">14</div><div class="section-title">ประมาณการค่าใช้จ่ายขออนุมัติเบิกงบเดินทาง</div></div>
+          <div class="grand-total-box">
+            <div class="lbl">ประมาณการค่าใช้จ่ายขออนุมัติเบิกงบเดินทาง</div>
+            <div class="val" id="grandTotalInline">0.00 บาท</div>
+          </div>
+        </div>
+
+        <!-- 13 -->
+        <div class="card form-section">
+          <div class="section-head"><div class="section-num">15</div><div class="section-title">แนบเอกสารก่อนบันทึก</div></div>
+          <div class="field-grid">
+            <div class="field">
+              <label>ใบขับขี่ (รูปถ่ายหรือไฟล์)</label>
+              <input type="file" id="licenseFileInput" accept="image/*,.pdf">
+              <div class="file-preview" id="licenseFilePreview"></div>
+            </div>
+            <div class="field">
+              <label>สำเนากรมธรรม์ พ.ร.บ. รถยนต์ (รูปถ่ายหรือไฟล์)</label>
+              <input type="file" id="insuranceFileInput" accept="image/*,.pdf">
+              <div class="file-preview" id="insuranceFilePreview"></div>
+            </div>
+          </div>
+          <span class="hint">รองรับไฟล์รูปภาพ (jpg, png) หรือ PDF ขนาดไม่เกิน 5 MB ต่อไฟล์ ระบบจะบีบอัดรูปภาพให้อัตโนมัติเพื่อให้บันทึกได้รวดเร็ว</span>
+        </div>
+
+      </div>
+
+      <!-- Summary sidebar -->
+      <div class="card summary-card">
+        <h3 style="margin-bottom:10px;">สรุปยอดขออนุมัติเบิกงบ</h3>
+        <div class="summary-row"><span>ค่าเดินทาง</span><span id="sumTravel">0.00 บาท</span></div>
+        <div class="summary-row" id="sumAccomRow"><span>ค่าที่พัก</span><span id="sumAccom">0.00 บาท</span></div>
+        <div class="summary-row" id="sumPerDiemRow"><span>ค่าเบี้ยเลี้ยง</span><span id="sumPerDiem">0.00 บาท</span></div>
+        <div class="summary-total compact">
+          <div class="lbl">ประมาณการค่าใช้จ่ายขออนุมัติเบิกงบเดินทาง (ข้อ 14)</div>
+          <div class="val" id="sumTotal">0.00 บาท</div>
+        </div>
+        <div class="summary-total emphasize" style="background:linear-gradient(135deg,#2E9E6D,#4FBE8C);">
+          <div class="lbl">รวมอนุมัติค่าเดินทาง (เฉพาะค่าเดินทาง)</div>
+          <div class="val" id="sumApprovedTravel">0.00 บาท</div>
+        </div>
+        <div class="btn-row" id="approveRejectRow" style="display:none;">
+          <button type="button" class="btn" id="viewOnlyApproveBtn" style="background:#1F8A4C;color:#fff;">✔ อนุมัติคำขอนี้</button>
+          <button type="button" class="btn" id="viewOnlyRejectBtn" style="background:#C0392B;color:#fff;">✕ ไม่อนุมัติคำขอนี้</button>
+        </div>
+        <div class="btn-row" id="viewOnlyCancelRow" style="display:none;">
+          <button type="button" class="btn" id="viewOnlyCancelBtn" style="background:var(--danger);color:#fff;">✕ ยกเลิกคำขอนี้</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="saveBtn">💾 บันทึกข้อมูล</button>
+          <button class="btn btn-outline" id="exportExcelBtn">📊 ส่งออก Excel (รายการนี้)</button>
+          <button class="btn btn-outline" id="exportPdfBtn">📄 ส่งออก PDF (รายการนี้)</button>
+          <button class="btn btn-ghost" id="clearBtn">ล้างแบบฟอร์ม</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align:center;font-size:12.5px;color:var(--muted);padding:14px 4px 0;">
+      หมายเหตุ: การเดินทางโดยรถส่วนบุคคล หากเกิดความเสียหายกับรถ บริษัทไม่รับผิดชอบทุกกรณี
+    </div>
+  </section>
+
+  <!-- ============ SUCCESS TAB (shown after a save) ============ -->
+  <section id="tab-success" class="tab-panel">
+    <div class="success-wrap">
+      <div class="success-icon">✓</div>
+      <h2 class="success-title">บันทึกข้อมูลสำเร็จ</h2>
+      <p class="success-sub">คำขออนุมัติเบิกงบก่อนเดินทางของคุณถูกบันทึกเรียบร้อยแล้ว</p>
+      <div class="success-card" id="successSummary"></div>
+      <div class="success-btn-row">
+        <button class="btn btn-outline" id="successPdfBtn" style="width:auto;padding:11px 24px;">📄 ส่งออก PDF</button>
+        <button class="btn btn-outline" id="successViewBtn" style="width:auto;padding:11px 24px;">👁️ ดูข้อมูล</button>
+        <button class="btn btn-outline" id="successCancelBtn" style="width:auto;padding:11px 24px;color:var(--danger);border-color:var(--danger);">✕ ยกเลิก</button>
+        <button class="btn btn-primary" id="successNewFormBtn" style="width:auto;padding:11px 24px;display:none;">📝 กรอกแบบฟอร์มใหม่</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<div id="toast"></div>
+
+<!-- Custom confirm/prompt dialog — replaces native window.confirm()/prompt() so the
+     browser's own "don't allow this site to prompt again" setting can never silently
+     disable buttons like "สำหรับผู้ดูแล" or the cancel/approve confirmations. -->
+<div id="appDialogOverlay" class="app-dialog-overlay hidden">
+  <div class="app-dialog-box">
+    <div class="app-dialog-title" id="appDialogTitle"></div>
+    <div class="app-dialog-msg" id="appDialogMsg"></div>
+    <input type="text" id="appDialogInput" class="app-dialog-input" style="display:none;">
+    <div class="app-dialog-btnrow">
+      <button type="button" id="appDialogCancelBtn" class="btn btn-outline">ยกเลิก</button>
+      <button type="button" id="appDialogOkBtn" class="btn btn-primary">ตกลง</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden printable form for formal PDF export -->
+<div id="printArea" style="position:fixed;left:-9999px;top:0;width:760px;background:#fff;padding:40px 44px;font-family:'Sarabun',sans-serif;color:#16283B;"></div>
+
+<!-- Detail view modal — shows the full submitted form data for a record from the overview list -->
+<div id="detailOverlay" class="detail-overlay hidden">
+  <div class="detail-box">
+    <div class="detail-box-header">
+      <h3 style="margin:0;font-size:16px;color:var(--navy-deep);">รายละเอียดคำขออนุมัติเบิกงบ</h3>
+      <div style="display:flex;gap:8px;">
+        <button type="button" class="btn btn-outline" id="detailPdfBtn" style="width:auto;padding:8px 14px;font-size:13px;">📄 ส่งออก PDF</button>
+        <button type="button" class="detail-close-btn" id="detailCloseBtn">ปิด ✕</button>
+      </div>
+    </div>
+    <div class="detail-box-body" id="detailBoxBody"></div>
+  </div>
+</div>
+
+
+<script>
+(function(){
+  // ======================================================================
+  // รายชื่อ DC และ Shop ทั้งหมด อ้างอิงจากไฟล์ "รายชื่อ DC.xlsx" ที่แนบมา
+  // ======================================================================
+  const DC_LIST = [
+    "DC เชียงใหม่",
+    "DC แม่ฮ่องสอน",
+    "DC ลำพูน",
+    "DC ลำปาง",
+    "DC พะเยา",
+    "DC เชียงราย",
+    "DC ฝาง",
+    "DC แม่สาย",
+    "DC อุตรดิตถ์",
+    "DC แพร่",
+    "DC น่าน",
+    "DC สุโขทัย",
+    "DC พิษณุโลก",
+    "DC เพชรบูรณ์",
+    "DC นครสวรรค์",
+    "DC ตาก",
+    "DC พิจิตร",
+    "DC ชัยนาท",
+    "DC อุดรธานี",
+    "DC หนองคาย",
+    "DC สกลนคร",
+    "DC นครพนม",
+    "DC ยโสธร",
+    "DC ชัยภูมิ",
+    "DC ขอนแก่น",
+    "DC ร้อยเอ็ด",
+    "DC กาฬสินธุ์",
+    "DC มุกดาหาร",
+    "DC โคราช",
+    "DC บุรีรัมย์",
+    "DC สุรินทร์",
+    "DC ศรีสะเกษ",
+    "DC อุบลราชธานี",
+    "DC ปากช่อง",
+    "DC พังงา",
+    "DC ภูเก็ต",
+    "DC สุราษฎร์ธานี",
+    "DC ชุมพร",
+    "DC กระบี่",
+    "DC ทุ่งสง",
+    "DC นครศรีธรรมราช",
+    "DC หาดใหญ่",
+    "DC พัทลุง",
+    "DC ลพบุรี",
+    "DC สระบุรี",
+    "DC อยุธยา",
+    "DC สุพรรณบุรี",
+    "DC ชลบุรี",
+    "DC ระยอง",
+    "DC จันทบุรี",
+    "DC พัทยา",
+    "DC ปราจีนบุรี",
+    "DC ฉะเชิงเทรา",
+    "DC ชะอำ",
+    "DC ราชบุรี",
+    "DC กาญจนบุรี",
+    "DC นครปฐม",
+    "DC สมุทรสาคร",
+    "CDC บางนา",
+    "DC พุทธมณฑลสาย 3",
+    "DC รังสิต",
+    "Shop สันกำแพง",
+    "Shop บ้านถวาย",
+    "Shop แสงตะวัน",
+    "Shop มช.",
+    "Shop รัตนโกสินทร์",
+    "Shop ป่าแดด",
+    "Shop หนองหอย",
+    "Shop แม่โจ้",
+    "Shop เวียงป่าเป้า",
+    "Shop ท่าลี่",
+    "Shop ป่าซาง",
+    "Shop นิคมลำพูน",
+    "Shop คลังลำพูน",
+    "Shop อุตรดิตถ์",
+    "Shop เชียงคำ",
+    "Shop แม่จัน",
+    "Shop เมืองเชียงราย",
+    "Shop เชียงของ",
+    "Shop เวียงพางคำ",
+    "Shop นครสวรรค์",
+    "Shop อุทัยธานี",
+    "shop นครสวรรค์ 2 ปากน้ำโพ",
+    "Shop แม่สอด",
+    "Shop ม.นเรศวร",
+    "Shop พิจิตร",
+    "Shop สิงห์บุรี",
+    "Shop กำแพงเพชร",
+    "Shop วิเชียร",
+    "Shop โคราช",
+    "Shop สุรินทร์",
+    "Shop วารินชำราบ",
+    "Shop เมืองอุบล",
+    "SHOP สามเหลี่ยมขอนแก่น",
+    "Shop เมืองอุดร",
+    "Shop หนองบัวลำภู",
+    "Shop เลย",
+    "Shop บึงกาฬ",
+    "Shop สว่างแดนดิน",
+    "Shop มหาสารคาม",
+    "Shop พล",
+    "Shop อำนาจเจริญ",
+    "Shop กันทรลักษ์",
+    "Shop ประจวบคีรีขันธ์",
+    "Shop ตรัง",
+    "Shop นครศรีธรรมราช",
+    "Shop สุราษฏร์",
+    "Shop สิชล",
+    "Shop พัทลุง",
+    "Shop อ่างทอง",
+    "Shop อู่ทอง",
+    "Shop สี่แยกมหานาค",
+    "Shop พุทธมณฑลสาย 2",
+    "Shop กทม. (จตุจักร)",
+    "Shop สุวรรณภูมิ"
+  ];
+
+  // ---------- Tabs ----------
+  function showTab(name){
+    document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active', p.id==='tab-'+name));
+  }
+  document.querySelectorAll('.tab').forEach(btn=>{
+    btn.addEventListener('click',()=> {
+      if(btn.dataset.tab === 'form') clearForm();
+      showTab(btn.dataset.tab);
+    });
+  });
+
+  // ---------- Access control: only the owner + selected users see "ภาพรวม" ----------
+  const el = id => document.getElementById(id);
+
+  // ---------- Custom confirm/prompt dialog (replaces native confirm()/prompt()) ----------
+  // See the comment on #appDialogOverlay in the HTML for why: native dialogs can be
+  // permanently silenced per-page by the browser itself, which made buttons relying on them
+  // (like admin unlock) stop working with no visible error. These always render on-page.
+  let appDialogResolve = null;
+  function closeAppDialog(result){
+    el('appDialogOverlay').classList.add('hidden');
+    const resolve = appDialogResolve;
+    appDialogResolve = null;
+    if(resolve) resolve(result);
+  }
+  el('appDialogCancelBtn').addEventListener('click', ()=> closeAppDialog(null));
+  el('appDialogOverlay').addEventListener('click', (e)=>{ if(e.target.id==='appDialogOverlay') closeAppDialog(null); });
+  el('appDialogOkBtn').addEventListener('click', ()=>{
+    const input = el('appDialogInput');
+    if(input.style.display !== 'none'){ closeAppDialog(input.value); }
+    else { closeAppDialog(true); }
+  });
+  el('appDialogInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); el('appDialogOkBtn').click(); } });
+
+  // appConfirm(message, title?) -> Promise<boolean>
+  function appConfirm(message, title){
+    return new Promise(resolve=>{
+      appDialogResolve = (result)=> resolve(result===true);
+      el('appDialogTitle').textContent = title || 'ยืนยันการทำรายการ';
+      el('appDialogMsg').textContent = message || '';
+      el('appDialogMsg').style.display = message ? '' : 'none';
+      el('appDialogInput').style.display = 'none';
+      el('appDialogOkBtn').textContent = 'ยืนยัน';
+      el('appDialogOverlay').classList.remove('hidden');
+    });
+  }
+  // appPrompt(message, defaultValue?, title?) -> Promise<string|null>
+  function appPrompt(message, defaultValue, title){
+    return new Promise(resolve=>{
+      appDialogResolve = (result)=> resolve(result===null ? null : String(result));
+      el('appDialogTitle').textContent = title || 'กรอกข้อมูล';
+      el('appDialogMsg').textContent = message || '';
+      el('appDialogMsg').style.display = message ? '' : 'none';
+      const input = el('appDialogInput');
+      input.style.display = '';
+      input.value = defaultValue || '';
+      el('appDialogOkBtn').textContent = 'ตกลง';
+      el('appDialogOverlay').classList.remove('hidden');
+      setTimeout(()=> input.focus(), 30);
+    });
+  }
+  // Everyone else only ever sees "กรอกแบบฟอร์ม". This is a *soft* UI lock, not real
+  // authentication — anyone who opens the browser's dev tools can still see the underlying
+  // HTML/records. It's meant to keep casual users on the form, not to protect sensitive
+  // data from a determined person. If real access control is needed (e.g. hiding salary-like
+  // travel-cost figures from anyone but named approvers with certainty), that requires a
+  // proper login system on a server, which a single static HTML file cannot provide.
+  //
+  // Add/remove employee codes below to control who can unlock the Overview tab, and who
+  // (a subset of those people, typically) is also allowed to approve/reject requests.
+  // A code only needs to be in APPROVER_CODES — it doesn't also need to be listed in
+  // OVERVIEW_ALLOWED_CODES — approver access automatically grants overview access too.
+  const OVERVIEW_ALLOWED_CODES = ['OWNER01']; // <-- ใส่รหัสพนักงานของเจ้าของ + ผู้ใช้ที่อนุญาตให้เห็นหน้าภาพรวม
+  const APPROVER_CODES = ['OWNER01'];         // <-- ใส่รหัสพนักงานของผู้มีสิทธิ์กด "อนุมัติ/ไม่อนุมัติ" คำขอ
+  const APPROVER_EMAIL = 'branchadmin507@gmail.com,choosak.m@nimexpress.com'; // <-- อีเมลผู้อนุมัติที่จะรับการแจ้งเตือนเมื่อมีคำขอใหม่ (ใส่ได้หลายอีเมล คั่นด้วยจุลภาค)
+  const ACCESS_KEY = 'nim_travel_budget::overview_access';
+  const APPROVER_KEY = 'nim_travel_budget::approver_access';
+
+  function hasOverviewAccess(){
+    try{ return sessionStorage.getItem(ACCESS_KEY) === '1'; }catch(e){ return false; }
+  }
+  function grantOverviewAccess(){
+    try{ sessionStorage.setItem(ACCESS_KEY, '1'); }catch(e){}
+  }
+  function revokeOverviewAccess(){
+    try{ sessionStorage.removeItem(ACCESS_KEY); }catch(e){}
+  }
+  function hasApproverAccess(){
+    try{ return sessionStorage.getItem(APPROVER_KEY) === '1'; }catch(e){ return false; }
+  }
+  function grantApproverAccess(){
+    try{ sessionStorage.setItem(APPROVER_KEY, '1'); }catch(e){}
+  }
+  function revokeApproverAccess(){
+    try{ sessionStorage.removeItem(APPROVER_KEY); }catch(e){}
+  }
+  function applyAccessUI(){
+    const allowed = hasOverviewAccess();
+    const approver = hasApproverAccess();
+    el('overviewTabBtn').style.display = allowed ? '' : 'none';
+    el('adminUnlockBtn').textContent = allowed ? ('🔓 ออกจากโหมดผู้ดูแล'+(approver ? ' (ผู้อนุมัติ)' : '')) : '🔒 สำหรับผู้ดูแล';
+    if(el('successOverviewBtn')) el('successOverviewBtn').style.display = allowed ? '' : 'none';
+  }
+  // Only navigates to Overview if the current browser tab is unlocked; otherwise falls back
+  // to the home screen. Used everywhere the code used to call showTab('overview') directly, so a
+  // restricted user can never land on Overview even via an old button/shortcut.
+  function goOverviewIfAllowed(){
+    showTab(hasOverviewAccess() ? 'overview' : 'home');
+  }
+  el('adminUnlockBtn').addEventListener('click', async ()=>{
+    if(hasOverviewAccess()){
+      revokeOverviewAccess();
+      revokeApproverAccess();
+      applyAccessUI();
+      showTab('home');
+      toast('ออกจากโหมดผู้ดูแลแล้ว');
+      return;
+    }
+    const code = ((await appPrompt('กรอกรหัสพนักงานเพื่อดูหน้าภาพรวม', '', 'สำหรับผู้ดูแล'))||'').trim();
+    if(!code) return;
+    const isViewer = OVERVIEW_ALLOWED_CODES.includes(code);
+    const isApprover = APPROVER_CODES.includes(code);
+    if(isViewer || isApprover){
+      grantOverviewAccess();
+      if(isApprover) grantApproverAccess();
+      applyAccessUI();
+      showTab('overview');
+      toast(isApprover ? 'เข้าสู่หน้าภาพรวมสำเร็จ (สิทธิ์ผู้อนุมัติ)' : 'เข้าสู่หน้าภาพรวมสำเร็จ');
+    } else {
+      toast('รหัสพนักงานนี้ไม่มีสิทธิ์ดูหน้าภาพรวม');
+    }
+  });
+  applyAccessUI();
+  // Everyone — regardless of Overview access — lands on the home screen first, per the
+  // "show the title + a 'กรอกแบบฟอร์ม' button, click to go to the form" requirement.
+  showTab('home');
+  el('homeFormBtn').addEventListener('click', ()=>{
+    el('cancelLookupCode').value = '';
+    el('cancelLookupBox').style.display = 'none';
+    el('choiceMainBox').style.display = 'block';
+    showTab('formchoice');
+  });
+  el('choiceNewFormBtn').addEventListener('click', ()=>{
+    clearForm();
+    showTab('form');
+  });
+  el('choiceCancelOldBtn').addEventListener('click', ()=>{
+    el('choiceMainBox').style.display = 'none';
+    el('cancelLookupBox').style.display = 'block';
+    el('cancelLookupCode').focus();
+  });
+  el('cancelLookupBackBtn').addEventListener('click', ()=>{
+    el('cancelLookupBox').style.display = 'none';
+    el('choiceMainBox').style.display = 'block';
+  });
+  el('cancelLookupSearchBtn').addEventListener('click', async ()=>{
+    const code = (el('cancelLookupCode').value||'').trim();
+    if(!code){ toast('กรุณากรอกรหัสพนักงาน'); return; }
+    el('cancelLookupSearchBtn').disabled = true;
+    try{
+      const records = await loadRecords();
+      const matches = records
+        .filter(r=> (r.empCode||'').trim().toLowerCase() === code.toLowerCase() && isActiveRecord(r))
+        .sort((a,b)=> new Date(b.createdAt||0) - new Date(a.createdAt||0));
+      if(!matches.length){
+        toast('ไม่พบคำขอที่ยังไม่ถูกยกเลิกสำหรับรหัสพนักงานนี้');
+      } else {
+        const full = await loadRecordWithFiles(matches[0]);
+        populateFormFromRecord(full, true);
+      }
+    }catch(e){
+      console.error('cancel lookup failed', e);
+      toast('เกิดข้อผิดพลาดในการค้นหาคำขอ');
+    }
+    el('cancelLookupSearchBtn').disabled = false;
+  });
+  // ---------- Navigate from an overview KPI card to the request-list tab ----------
+  // filter: null = all active requests (default "จำนวนคำขอ" view), or 'pending'/'approved'/'cancelled'
+  let requestListFilter = null;
+  const REQUEST_LIST_TITLES = {
+    null: 'รายการขออนุมัติเบิกงบก่อนเดินทาง (ทุกสถานะ)',
+    pending: 'รายการที่รออนุมัติ',
+    approved: 'รายการที่อนุมัติแล้ว',
+    rejected: 'รายการที่ไม่อนุมัติ',
+    cancelled: 'รายการที่ถูกยกเลิก'
+  };
+  function openRequestList(filter){
+    requestListFilter = filter;
+    el('requestListTitle').textContent = REQUEST_LIST_TITLES[filter] || REQUEST_LIST_TITLES[null];
+    // Clicking "จำนวนคำขอทั้งหมด" always shows every status (including cancelled) already,
+    // so the separate checkbox is no longer needed on any view.
+    el('showCancelledToggleRow').style.display = 'none';
+    showTab('requestlist');
+    refreshOverview();
+  }
+  if(el('kpiCountCard')){
+    el('kpiCountCard').addEventListener('click', ()=> openRequestList(null));
+  }
+  if(el('kpiPendingCard')){
+    el('kpiPendingCard').addEventListener('click', ()=> openRequestList('pending'));
+  }
+  if(el('kpiApprovedCard')){
+    el('kpiApprovedCard').addEventListener('click', ()=> openRequestList('approved'));
+  }
+  if(el('kpiRejectedCard')){
+    el('kpiRejectedCard').addEventListener('click', ()=> openRequestList('rejected'));
+  }
+  if(el('kpiCancelledCard')){
+    el('kpiCancelledCard').addEventListener('click', ()=> openRequestList('cancelled'));
+  }
+  if(el('requestListBackBtn')){
+    el('requestListBackBtn').addEventListener('click', ()=> goOverviewIfAllowed());
+  }
+  el('brandHomeBtn').addEventListener('click', ()=>{
+    showTab('home');
+  });
+
+
+  function toast(msg){
+    const t=document.getElementById('toast');
+    t.textContent=msg; t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer=setTimeout(()=>t.classList.remove('show'),2400);
+  }
+
+  const fmt = n => (Number(n)||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fmtInt = n => Math.round(Number(n)||0).toLocaleString('th-TH');
+  const todayStr = ()=> new Date().toISOString().slice(0,10);
+
+  // ---------- DC autocomplete ----------
+  // เดิมใช้ <input list="..."> ผูกกับ <datalist> ของเบราว์เซอร์ ซึ่งบนมือถือ (โดยเฉพาะ Safari/iOS
+  // และ Chrome Android บางเวอร์ชัน) มักไม่แสดงเป็นรายการให้แตะเลือกได้จริง — จะเห็นแค่ช่องพิมพ์เฉย ๆ
+  // เปลี่ยนมาสร้างรายการแบบกำหนดเองด้วย JS แทน เพื่อให้พิมพ์ค้นหา/แตะเลือกได้เหมือนกันทุกอุปกรณ์
+  function setupDcAutocomplete(inputId, listId){
+    const input = el(inputId);
+    const list = el(listId);
+    let items = [];
+
+    function render(query){
+      const q = (query||'').trim().toLowerCase();
+      items = q ? DC_LIST.filter(name=>name.toLowerCase().includes(q)) : DC_LIST.slice();
+      if(items.length===0){
+        list.innerHTML = `<div class="dc-autocomplete-empty">ไม่พบชื่อ DC/Shop ที่ตรงกัน — ใช้ข้อความที่พิมพ์นี้ได้เลย</div>`;
+        list.classList.add('open');
+        return;
+      }
+      list.innerHTML = items.map((name,i)=>`<div class="dc-autocomplete-item" data-idx="${i}">${name}</div>`).join('');
+      list.classList.add('open');
+    }
+
+    input.addEventListener('input', ()=> render(input.value));
+    input.addEventListener('focus', ()=> render(input.value));
+    // ใช้ pointerdown/pointerup ร่วมกับระยะที่นิ้วขยับ เพื่อแยกระหว่าง "แตะเพื่อเลือก" กับ "ลากเพื่อเลื่อนดูรายชื่อ"
+    // (เดิม preventDefault() ทุกครั้งที่ pointerdown ทำให้เลื่อนรายชื่อด้วยนิ้วบนมือถือไม่ได้เลย)
+    let pdItem = null, pdX = 0, pdY = 0, pdMoved = false;
+    list.addEventListener('pointerdown', (e)=>{
+      const itemEl = e.target.closest('.dc-autocomplete-item');
+      if(!itemEl) return;
+      pdItem = itemEl; pdX = e.clientX; pdY = e.clientY; pdMoved = false;
+    });
+    list.addEventListener('pointermove', (e)=>{
+      if(!pdItem) return;
+      if(Math.abs(e.clientX-pdX) > 8 || Math.abs(e.clientY-pdY) > 8) pdMoved = true;
+    });
+    function selectFromPointer(e){
+      if(!pdItem){ return; }
+      if(!pdMoved){
+        e.preventDefault();
+        input.value = items[+pdItem.dataset.idx];
+        list.classList.remove('open');
+        input.dispatchEvent(new Event('change', {bubbles:true}));
+      }
+      pdItem = null; pdMoved = false;
+    }
+    list.addEventListener('pointerup', selectFromPointer);
+    list.addEventListener('pointercancel', ()=>{ pdItem = null; pdMoved = false; });
+    input.addEventListener('blur', ()=>{
+      setTimeout(()=> list.classList.remove('open'), 150);
+    });
+    document.addEventListener('click', (e)=>{
+      if(e.target!==input && !list.contains(e.target)) list.classList.remove('open');
+    });
+  }
+  (function initDcAutocomplete(){
+    setupDcAutocomplete('startPoint','startPointList');
+    setupDcAutocomplete('endPoint','endPointList');
+  })();
+
+  // ---------- Thai date helpers (Buddhist year, d/m/y) ----------
+  function isoToThaiDMY(iso){
+    if(!iso) return '';
+    const d = new Date(iso+'T00:00:00');
+    if(isNaN(d)) return '';
+    const dd = String(d.getDate()).padStart(2,'0');
+    const mm = String(d.getMonth()+1).padStart(2,'0');
+    const yyyy = d.getFullYear()+543;
+    return `${dd}/${mm}/${yyyy}`;
+  }
+  function thaiDMYToIso(str){
+    const m = String(str).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if(!m) return null;
+    const dd = +m[1], mm = +m[2], yyyyBE = +m[3];
+    const yyyyCE = yyyyBE - 543;
+    if(mm<1||mm>12||dd<1||dd>31||yyyyCE<1900) return null;
+    const d = new Date(yyyyCE, mm-1, dd);
+    if(d.getMonth()!==mm-1) return null;
+    return `${yyyyCE}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
+  }
+
+  // Formats a record's createdAt (ISO timestamp, set once when first saved) as HH:mm —
+  // used to show what time a request was filled in, alongside its date, in exports/the Sheet.
+  function createdAtTime(createdAtIso){
+    if(!createdAtIso) return '';
+    const d = new Date(createdAtIso);
+    if(isNaN(d)) return '';
+    const hh = String(d.getHours()).padStart(2,'0');
+    const mi = String(d.getMinutes()).padStart(2,'0');
+    return `${hh}:${mi}`;
+  }
+
+  function wireDateField(hiddenId, textId, onChange){
+    const hidden = el(hiddenId), text = el(textId);
+    hidden.addEventListener('change', ()=>{
+      text.value = isoToThaiDMY(hidden.value);
+      if(onChange) onChange();
+    });
+    text.addEventListener('change', ()=>{
+      const raw = text.value.trim();
+      if(raw===''){ hidden.value=''; if(onChange) onChange(); return; }
+      const iso = thaiDMYToIso(raw);
+      if(iso){
+        hidden.value = iso;
+        text.value = isoToThaiDMY(iso);
+        if(onChange) onChange();
+      } else {
+        toast('รูปแบบวันที่ไม่ถูกต้อง กรุณากรอกเป็น วว/ดด/ปปปป');
+        text.value = hidden.value ? isoToThaiDMY(hidden.value) : '';
+      }
+    });
+  }
+  // ---------- Custom Thai (Buddhist-era) date picker popup ----------
+  // Browsers render <input type="date">'s native calendar using the OS locale, which shows
+  // Christian-era (ค.ศ.) months/years and can't be restyled or forced into Buddhist era (พ.ศ.)
+  // from CSS/JS. To keep the popup calendar consistent with the พ.ศ. text field next to it,
+  // we build our own lightweight calendar widget instead of calling hidden.showPicker().
+  const THAI_MONTHS_FULL = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+  const THAI_DOW = ['อา','จ','อ','พ','พฤ','ศ','ส'];
+
+  let tdpState = null;
+  function tdpOutsideClick(e){
+    if(tdpState && tdpState.popupEl && !tdpState.popupEl.contains(e.target) && e.target !== tdpState.anchorBtn){
+      closeThaiDatePicker();
+    }
+  }
+  function closeThaiDatePicker(){
+    if(tdpState && tdpState.popupEl) tdpState.popupEl.remove();
+    document.removeEventListener('mousedown', tdpOutsideClick, true);
+    tdpState = null;
+  }
+
+  function buildThaiDatePickerHTML(viewY, viewM, selIso){
+    const first = new Date(viewY, viewM, 1);
+    const startDow = first.getDay();
+    const daysInMonth = new Date(viewY, viewM+1, 0).getDate();
+    const daysInPrevMonth = new Date(viewY, viewM, 0).getDate();
+    const todayIso = todayStr();
+    let cells = '';
+    for(let i=0;i<42;i++){
+      const dayNum = i - startDow + 1;
+      let cellY = viewY, cellM = viewM, cellD = dayNum, muted=false;
+      if(dayNum < 1){ cellM = (viewM+11)%12; cellY = viewM===0?viewY-1:viewY; cellD = daysInPrevMonth+dayNum; muted=true; }
+      else if(dayNum > daysInMonth){ cellD = dayNum-daysInMonth; cellM=(viewM+1)%12; cellY = viewM===11?viewY+1:viewY; muted=true; }
+      const iso = `${cellY}-${String(cellM+1).padStart(2,'0')}-${String(cellD).padStart(2,'0')}`;
+      const isToday = iso===todayIso, isSel = iso===selIso;
+      cells += `<div class="tdp-day${muted?' tdp-muted':''}${isToday?' tdp-today':''}${isSel?' tdp-selected':''}" data-iso="${iso}">${cellD}</div>`;
+    }
+    const curBE = viewY+543;
+    let yearOpts = '';
+    for(let y=curBE-100; y<=curBE+10; y++){ const ce=y-543; yearOpts += `<option value="${ce}" ${ce===viewY?'selected':''}>${y}</option>`; }
+    const monthOpts = THAI_MONTHS_FULL.map((m,i)=>`<option value="${i}" ${i===viewM?'selected':''}>${m}</option>`).join('');
+    return `
+      <div class="tdp-header">
+        <button type="button" class="tdp-nav-btn" data-act="prev">‹</button>
+        <div class="tdp-month-year">
+          <select class="tdp-select" data-act="month">${monthOpts}</select>
+          <select class="tdp-select" data-act="year">${yearOpts}</select>
+        </div>
+        <button type="button" class="tdp-nav-btn" data-act="next">›</button>
+      </div>
+      <div class="tdp-grid">
+        ${THAI_DOW.map(d=>`<div class="tdp-dow">${d}</div>`).join('')}
+        ${cells}
+      </div>
+      <div class="tdp-footer">
+        <button type="button" class="tdp-today-btn" data-act="today">วันนี้</button>
+        <button type="button" class="tdp-clear-btn" data-act="clear">ล้างค่า</button>
+      </div>`;
+  }
+
+  function openThaiDatePicker(anchorBtn, hiddenId, textId, onChange){
+    closeThaiDatePicker();
+    const hidden = el(hiddenId);
+    const curIso = hidden.value || todayStr();
+    const curD = new Date(curIso+'T00:00:00');
+    let viewY = curD.getFullYear(), viewM = curD.getMonth();
+    const popup = document.createElement('div');
+    popup.className = 'thai-datepicker-popup';
+    document.body.appendChild(popup);
+
+    function render(){
+      popup.innerHTML = buildThaiDatePickerHTML(viewY, viewM, hidden.value);
+      popup.querySelectorAll('.tdp-day').forEach(dEl=>{
+        dEl.addEventListener('click', ()=>{
+          const iso = dEl.dataset.iso;
+          hidden.value = iso;
+          el(textId).value = isoToThaiDMY(iso);
+          if(onChange) onChange();
+          closeThaiDatePicker();
+        });
+      });
+      popup.querySelector('[data-act="prev"]').addEventListener('click', ()=>{ viewM--; if(viewM<0){viewM=11;viewY--;} render(); });
+      popup.querySelector('[data-act="next"]').addEventListener('click', ()=>{ viewM++; if(viewM>11){viewM=0;viewY++;} render(); });
+      popup.querySelector('[data-act="month"]').addEventListener('change', (e)=>{ viewM = +e.target.value; render(); });
+      popup.querySelector('[data-act="year"]').addEventListener('change', (e)=>{ viewY = +e.target.value; render(); });
+      popup.querySelector('[data-act="today"]').addEventListener('click', ()=>{
+        const t = todayStr();
+        hidden.value = t; el(textId).value = isoToThaiDMY(t);
+        if(onChange) onChange();
+        closeThaiDatePicker();
+      });
+      popup.querySelector('[data-act="clear"]').addEventListener('click', ()=>{
+        hidden.value = ''; el(textId).value = '';
+        if(onChange) onChange();
+        closeThaiDatePicker();
+      });
+    }
+    render();
+
+    const rect = anchorBtn.getBoundingClientRect();
+    const popupWidth = 280;
+    let left = rect.left + window.scrollX;
+    const maxLeft = window.scrollX + document.documentElement.clientWidth - popupWidth - 10;
+    if(left > maxLeft) left = Math.max(10, maxLeft);
+    popup.style.left = left+'px';
+    popup.style.top = (rect.bottom + window.scrollY + 6)+'px';
+
+    tdpState = {popupEl:popup, anchorBtn};
+    setTimeout(()=> document.addEventListener('mousedown', tdpOutsideClick, true), 0);
+  }
+
+  document.querySelectorAll('.date-icon-btn').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const target = btn.dataset.target;
+      const textId = target+'Text';
+      const onChangeFn = (target==='departDate' || target==='returnDate') ? recalcDates : null;
+      openThaiDatePicker(btn, target, textId, onChangeFn);
+    });
+  });
+
+  wireDateField('fillDate','fillDateText', null);
+  wireDateField('departDate','departDateText', recalcDates);
+  wireDateField('returnDate','returnDateText', recalcDates);
+
+  // init today's date
+  el('fillDate').value = todayStr();
+  el('fillDateText').value = isoToThaiDMY(todayStr());
+
+  // ---------- Purpose "other" toggle ----------
+  el('purpose').addEventListener('change', ()=>{
+    el('purposeOther').style.display = el('purpose').value==='อื่น ๆ' ? 'block':'none';
+  });
+
+  // ---------- Fuel rate by vehicle type (section 5/8) ----------
+  const FUEL_RATE_TABLE = {
+    'รถยนต์ (รถน้ำมัน)': 4.00,
+    'รถยนต์ (รถ EV)': 2.50,
+    'รถจักรยานยนต์': 1.00
+  };
+  function getFuelRate(){
+    return FUEL_RATE_TABLE[el('vehicleType').value] ?? 4.00;
+  }
+  function applyFuelRate(){
+    el('fuelRate').value = getFuelRate().toFixed(2);
+    recalcCosts();
+  }
+  el('vehicleType').addEventListener('change', applyFuelRate);
+
+  // ---------- Co-traveling employee details (section 2) ----------
+  // helperCount = total number of traveling staff INCLUDING the main applicant (section 1).
+  // We render input rows only for the additional co-travelers (count - 1), each capturing name/code/position.
+  let helperNamesValues = []; // array of {name, code, position}
+  function renderHelperNames(){
+    const container = el('helperNamesList');
+    container.innerHTML = '';
+    helperNamesValues.forEach((val,i)=>{
+      const v = val || {prefix:'นาย',name:'',code:'',position:''};
+      const wrap = document.createElement('div');
+      wrap.className = 'helper-item';
+      const esc = s => (s||'').replace(/"/g,'&quot;');
+      const prefixOpt = p => `<option value="${p}" ${v.prefix===p?'selected':''}>${p}</option>`;
+      wrap.innerHTML = `
+        <div class="idx">${i+2}</div>
+        <div class="helper-fields" style="grid-template-columns:0.85fr 1.2fr 1fr 1fr;">
+          <select data-idx="${i}" data-field="prefix" class="hn-prefix">
+            ${prefixOpt('นาย')}${prefixOpt('นาง')}${prefixOpt('นางสาว')}
+          </select>
+          <input type="text" placeholder="ชื่อพนักงานร่วมเดินทางคนที่ ${i+2}" data-idx="${i}" data-field="name" value="${esc(v.name)}">
+          <input type="text" placeholder="รหัสพนักงาน" data-idx="${i}" data-field="code" value="${esc(v.code)}">
+          <input type="text" placeholder="ตำแหน่ง" data-idx="${i}" data-field="position" value="${esc(v.position)}">
+        </div>`;
+      container.appendChild(wrap);
+    });
+    container.querySelectorAll('input').forEach(inp=>{
+      inp.addEventListener('input', ()=>{
+        const idx = +inp.dataset.idx, field = inp.dataset.field;
+        if(!helperNamesValues[idx]) helperNamesValues[idx] = {prefix:'นาย',name:'',code:'',position:''};
+        helperNamesValues[idx][field] = inp.value;
+      });
+    });
+    container.querySelectorAll('.hn-prefix').forEach(sel=>{
+      sel.addEventListener('change', ()=>{
+        const idx = +sel.dataset.idx;
+        if(!helperNamesValues[idx]) helperNamesValues[idx] = {prefix:'นาย',name:'',code:'',position:''};
+        helperNamesValues[idx].prefix = sel.value;
+        applyRoomGenderSuggestion();
+      });
+    });
+  }
+  el('helperCount').addEventListener('input', ()=>{
+    const total = Math.max(1, Math.floor(Number(el('helperCount').value)||1));
+    const n = Math.max(0, total-1); // co-travelers besides the main applicant
+    if(n > helperNamesValues.length){
+      while(helperNamesValues.length < n) helperNamesValues.push({prefix:'นาย',name:'',code:'',position:''});
+    } else {
+      helperNamesValues.length = n;
+    }
+    renderHelperNames();
+    renderPerDiemList();
+    applyRoomGenderSuggestion();
+  });
+
+  // ---------- Per-traveler per diem selection (section 11) ----------
+  // One row per traveler counted in "จำนวนพนักงานเดินทางรวม" (section 2), since each
+  // traveler may hold a different position level / work in a different area.
+  const PERDIEM_TABLE = { lv10:{bkk:270, other:270}, lv39:{bkk:280, other:230} };
+  function getPerDiemRate(v){
+    return (PERDIEM_TABLE[v.level] && PERDIEM_TABLE[v.level][v.area]) || 0;
+  }
+
+  // ---------- Accommodation rate selection (section 10) ----------
+  // One row per traveler counted in "จำนวนพนักงานเดินทางรวม" (section 2), mirroring the
+  // per diem list, since each traveler may qualify for a different room rate and may need
+  // a different number of rooms.
+  const ACCOM_TABLE = { lv10:{bkk:1000, other:800}, lv39:{bkk:800, other:800} };
+  function getAccomRate(v){
+    return (ACCOM_TABLE[v.level] && ACCOM_TABLE[v.level][v.area]) || 0;
+  }
+  let accomValues = [{level:'lv10', area:'bkk'}];
+  function renderAccomList(){
+    const container = el('accomList');
+    const total = Math.max(1, Math.floor(Number(el('accomRoomCount').value)||1));
+    if(total > accomValues.length){
+      while(accomValues.length < total) accomValues.push({level:'lv10', area:'bkk'});
+    } else {
+      accomValues.length = total;
+    }
+    container.innerHTML = accomValues.map((v,i)=>{
+      const label = total>1 ? ('พนักงานคนที่ '+(i+1)) : 'เลือกระดับตำแหน่งและพื้นที่ปฏิบัติงาน';
+      return `
+      <div class="helper-item">
+        <div class="idx">${i+1}</div>
+        <div style="flex:1;">
+          <div style="font-size:12.5px;font-weight:600;color:var(--navy-deep);margin-bottom:6px;">${label}</div>
+          <div class="helper-fields" style="grid-template-columns:1.3fr 1fr 0.9fr;margin-bottom:4px;">
+            <label style="font-size:11px;color:var(--muted);font-weight:600;">ระดับตำแหน่ง</label>
+            <label style="font-size:11px;color:var(--muted);font-weight:600;">พื้นที่ปฏิบัติงาน</label>
+            <label style="font-size:11px;color:var(--muted);font-weight:600;">อัตรา/คืน</label>
+          </div>
+          <div class="helper-fields" style="grid-template-columns:1.3fr 1fr 0.9fr;">
+            <select data-idx="${i}" data-field="level" class="ac-select">
+              <option value="lv10" ${v.level==='lv10'?'selected':''}>ระดับผู้จัดการ (LV.10)</option>
+              <option value="lv39" ${v.level==='lv39'?'selected':''}>LV.9 ลงมา</option>
+            </select>
+            <select data-idx="${i}" data-field="area" class="ac-select">
+              <option value="bkk" ${v.area==='bkk'?'selected':''}>กทม. และปริมณฑล</option>
+              <option value="other" ${v.area==='other'?'selected':''}>พื้นที่อื่น</option>
+            </select>
+            <input type="text" class="ac-rate" readonly value="${fmt(getAccomRate(v))} บ./คืน">
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    container.querySelectorAll('.ac-select').forEach(sel=>{
+      sel.addEventListener('change', ()=>{
+        const idx = +sel.dataset.idx, field = sel.dataset.field;
+        accomValues[idx][field] = sel.value;
+        renderAccomList();
+        recalcCosts();
+      });
+    });
+  }
+  el('accomRoomCount').addEventListener('input', ()=>{
+    renderAccomList();
+    recalcCosts();
+  });
+
+  // ---------- Same-sex room sharing suggestion (section 10) ----------
+  // If every traveler's selected prefix (คำนำหน้าชื่อ) maps to the same gender,
+  // the room count is suggested at 1 room per 2 travelers. If prefixes indicate
+  // mixed genders (or any prefix is missing), each traveler is suggested a room of their own.
+  const PREFIX_GENDER = { 'นาย':'male', 'นาง':'female', 'นางสาว':'female' };
+  function getTravelerGenders(){
+    const total = Math.max(1, Math.floor(Number(el('helperCount').value)||1));
+    const genders = [ PREFIX_GENDER[el('empPrefix').value] || null ];
+    for(let i=0;i<total-1;i++){
+      const v = helperNamesValues[i];
+      genders.push(v && v.prefix ? (PREFIX_GENDER[v.prefix]||null) : null);
+    }
+    return genders;
+  }
+  function applyRoomGenderSuggestion(){
+    const total = Math.max(1, Math.floor(Number(el('helperCount').value)||1));
+    let suggestedRooms = total;
+    if(total > 1){
+      const genders = getTravelerGenders();
+      // Group travelers of the same known gender together, 2 per room (e.g. 2 male + 2 female = 2 rooms).
+      // Travelers with an unknown/missing prefix are conservatively given their own room each,
+      // since we can't safely assume who they should share with.
+      const maleCount = genders.filter(g=>g==='male').length;
+      const femaleCount = genders.filter(g=>g==='female').length;
+      const unknownCount = genders.filter(g=>!g).length;
+      suggestedRooms = Math.ceil(maleCount/2) + Math.ceil(femaleCount/2) + unknownCount;
+      suggestedRooms = Math.max(1, suggestedRooms);
+    }
+    el('accomRoomCount').value = suggestedRooms;
+    renderAccomList();
+    recalcCosts();
+  }
+  el('empPrefix').addEventListener('change', applyRoomGenderSuggestion);
+
+  let perDiemValues = [{level:'lv10', area:'bkk'}];
+  function renderPerDiemList(){
+    const container = el('perDiemList');
+    const total = Math.max(1, Math.floor(Number(el('helperCount').value)||1));
+    if(total > perDiemValues.length){
+      while(perDiemValues.length < total) perDiemValues.push({level:'lv10', area:'bkk'});
+    } else {
+      perDiemValues.length = total;
+    }
+    container.innerHTML = perDiemValues.map((v,i)=>{
+      const coTraveler = helperNamesValues[i-1];
+      const nameSuffix = (i>0 && coTraveler && coTraveler.name) ? (' — '+coTraveler.name) : '';
+      const label = (i===0 ? 'พนักงานคนที่ 1 (ผู้ขออนุมัติ)' : ('พนักงานคนที่ '+(i+1)))+nameSuffix;
+      return `
+      <div class="helper-item">
+        <div class="idx">${i+1}</div>
+        <div style="flex:1;">
+          <div style="font-size:12.5px;font-weight:600;color:var(--navy-deep);margin-bottom:6px;">${label}</div>
+          <div class="helper-fields" style="grid-template-columns:1.3fr 1fr 0.8fr;">
+            <select data-idx="${i}" data-field="level" class="pd-select">
+              <option value="lv10" ${v.level==='lv10'?'selected':''}>LV.9 ขึ้นไป</option>
+              <option value="lv39" ${v.level==='lv39'?'selected':''}>LV.3-8</option>
+            </select>
+            <select data-idx="${i}" data-field="area" class="pd-select">
+              <option value="bkk" ${v.area==='bkk'?'selected':''}>กทม. และปริมณฑล</option>
+              <option value="other" ${v.area==='other'?'selected':''}>พื้นที่อื่น</option>
+            </select>
+            <input type="text" class="pd-rate" readonly value="${fmt(getPerDiemRate(v))} บ./วัน">
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    container.querySelectorAll('.pd-select').forEach(sel=>{
+      sel.addEventListener('change', ()=>{
+        const idx = +sel.dataset.idx, field = sel.dataset.field;
+        perDiemValues[idx][field] = sel.value;
+        renderPerDiemList();
+        recalcCosts();
+      });
+    });
+  }
+
+  // ---------- File uploads (section 13: license photo + motor insurance copy) ----------
+  const uploadedFiles = { license:null, insurance:null };
+  const FILE_LABELS = { license:'ใบขับขี่', insurance:'สำเนากรมธรรม์ พ.ร.บ. รถยนต์' };
+  const MAX_FILE_BYTES = 5*1024*1024; // 5MB raw upload limit
+
+  function readFileAsDataURL(file){
+    return new Promise((resolve,reject)=>{
+      const r = new FileReader();
+      r.onload = ()=>resolve(r.result);
+      r.onerror = ()=>reject(new Error('อ่านไฟล์ไม่สำเร็จ'));
+      r.readAsDataURL(file);
+    });
+  }
+
+  // Downscale + compress images so the saved record stays small (avoids storage size errors)
+  function compressImageDataUrl(dataUrl, maxDim=1000, quality=0.72){
+    return new Promise((resolve,reject)=>{
+      const img = new Image();
+      img.onload = ()=>{
+        let {width, height} = img;
+        if(width>maxDim || height>maxDim){
+          const scale = maxDim/Math.max(width,height);
+          width = Math.round(width*scale); height = Math.round(height*scale);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img,0,0,width,height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = ()=>reject(new Error('ไม่สามารถประมวลผลรูปภาพได้'));
+      img.src = dataUrl;
+    });
+  }
+
+  function renderFilePreview(key){
+    const box = el(key+'FilePreview');
+    const f = uploadedFiles[key];
+    if(!f){ box.innerHTML=''; return; }
+    // ใช้ dataUrl (ถ้ามีในเครื่องนี้) ก่อน ไม่งั้นใช้ url ของ Google Drive (ถ้าไฟล์นี้เคยอัปโหลดขึ้น Drive
+    // แล้ว) — ทำให้ดูรูป/เปิดไฟล์ได้แม้เปิดจากคนละเครื่อง/เบราว์เซอร์กับที่แนบไฟล์ไว้ตอนแรก
+    const viewSrc = f.dataUrl || f.url || '';
+    const removeBtnHtml = `<button type="button" class="file-remove" data-key="${key}">ลบ</button>`;
+    if(f.isImage && viewSrc){
+      box.innerHTML = `<img src="${viewSrc}" alt="${FILE_LABELS[key]}" class="file-preview-img" style="cursor:zoom-in;" title="คลิกเพื่อดูรูปเต็ม"><span class="file-chip">${f.name}${removeBtnHtml}</span>`;
+    } else if(viewSrc){
+      box.innerHTML = `<span class="file-chip file-chip-clickable" style="cursor:pointer;" title="คลิกเพื่อเปิดไฟล์">📄 ${f.name}${removeBtnHtml}</span>`;
+    } else {
+      box.innerHTML = `<span class="file-chip" style="opacity:.75;">📄 ${f.name||'ไฟล์แนบ'} <span style="font-weight:400;font-size:11px;">(ไม่พบไฟล์ในอุปกรณ์นี้)</span>${removeBtnHtml}</span>`;
+    }
+    const removeBtn = box.querySelector('.file-remove');
+    if(removeBtn){
+      removeBtn.addEventListener('click', (ev)=>{
+        ev.stopPropagation();
+        uploadedFiles[key] = null;
+        el(key+'FileInput').value = '';
+        renderFilePreview(key);
+        updateSaveButtonState();
+        toast('ลบไฟล์'+FILE_LABELS[key]+'แล้ว');
+      });
+    }
+    const imgEl = box.querySelector('.file-preview-img');
+    if(imgEl && viewSrc){ imgEl.addEventListener('click', ()=> window.open(viewSrc, '_blank')); }
+    const chipEl = box.querySelector('.file-chip-clickable');
+    if(chipEl && viewSrc){
+      chipEl.addEventListener('click', (ev)=>{
+        if(ev.target.classList.contains('file-remove')) return;
+        window.open(viewSrc, '_blank');
+      });
+    }
+  }
+
+  ['license','insurance'].forEach(key=>{
+    el(key+'FileInput').addEventListener('change', async ()=>{
+      const input = el(key+'FileInput');
+      const file = input.files && input.files[0];
+      if(!file) return;
+      if(file.size > MAX_FILE_BYTES){
+        toast('ไฟล์'+FILE_LABELS[key]+'มีขนาดใหญ่เกิน 5 MB กรุณาเลือกไฟล์ใหม่');
+        input.value = ''; return;
+      }
+      try{
+        const isImage = file.type.startsWith('image/');
+        let dataUrl = await readFileAsDataURL(file);
+        if(isImage){ dataUrl = await compressImageDataUrl(dataUrl); }
+        uploadedFiles[key] = { name:file.name, type: isImage?'image/jpeg':file.type, isImage, dataUrl };
+        renderFilePreview(key);
+        updateSaveButtonState();
+        toast('แนบไฟล์'+FILE_LABELS[key]+'เรียบร้อยแล้ว');
+      }catch(e){
+        console.error(e);
+        toast('เกิดข้อผิดพลาดในการแนบไฟล์'+FILE_LABELS[key]);
+        input.value = '';
+      }
+    });
+  });
+
+  // ---------- Dates / work days ----------
+  function daysBetween(d1,d2){
+    if(!d1||!d2) return 0;
+    const a=new Date(d1), b=new Date(d2);
+    const diff = Math.round((b-a)/86400000)+1;
+    return diff>0?diff:0;
+  }
+  function recalcDates(){
+    const wd = daysBetween(el('departDate').value, el('returnDate').value);
+    el('workDays').value = wd + ' วัน';
+    const nights = Math.max(wd-1,0);
+    el('accomNights').value = nights;
+    el('perDiemDays').value = wd;
+    recalcCosts();
+  }
+
+  ['distanceKm','accomNights','perDiemDays','helperCount'].forEach(id=> el(id).addEventListener('input', recalcCosts));
+
+  function recalcCosts(){
+    const distanceOneWay = Number(el('distanceKm').value)||0;
+    const distance = distanceOneWay*2; // round trip, calculated automatically from one-way input
+    el('distanceRoundTrip').value = fmt(distance)+' กม.';
+    const fuelRate = getFuelRate();
+    const travelCost = distance*fuelRate;
+    el('travelCost').value = fmt(travelCost)+' บาท';
+    el('echoTravelCost').textContent = fmt(travelCost)+' บาท';
+
+    const nights = Number(el('accomNights').value)||0;
+    const accomBreakdown = accomValues.map(v=>{
+      const rate = getAccomRate(v);
+      return {
+        level: v.level, area: v.area,
+        levelLabel: v.level==='lv10' ? 'ระดับผู้จัดการ (LV.10)' : 'LV.9 ลงมา',
+        areaLabel: v.area==='bkk' ? 'กทม. และปริมณฑล' : 'พื้นที่อื่น',
+        rate, nights, cost: rate*nights
+      };
+    });
+    const accomCost = accomBreakdown.reduce((sum,b)=>sum+b.cost,0);
+    const accomRooms = accomBreakdown.length;
+    el('accomCost').value = fmt(accomCost)+' บาท';
+
+    const pdDays = Number(el('perDiemDays').value)||0;
+    const perDiemBreakdown = perDiemValues.map(v=>{
+      const rate = getPerDiemRate(v);
+      return {
+        level: v.level, area: v.area,
+        levelLabel: v.level==='lv10' ? 'LV.9 ขึ้นไป' : 'LV.3-8',
+        areaLabel: v.area==='bkk' ? 'กทม. และปริมณฑล' : 'พื้นที่อื่น',
+        rate, days: pdDays, cost: rate*pdDays
+      };
+    });
+    const perDiemCost = perDiemBreakdown.reduce((sum,b)=>sum+b.cost,0);
+    el('perDiemCost').value = fmt(perDiemCost)+' บาท';
+
+    // "ไป-กลับ (ไม่ค้างคืน)" trips never carry accommodation/per-diem costs, regardless of
+    // whatever values happen to still be sitting in those (hidden) fields — see applyTripType().
+    const accomCostFinal = tripType === 'oneday' ? 0 : accomCost;
+    const perDiemCostFinal = tripType === 'oneday' ? 0 : perDiemCost;
+    el('accomCost').value = fmt(accomCostFinal)+' บาท';
+    el('perDiemCost').value = fmt(perDiemCostFinal)+' บาท';
+
+    const total = travelCost+accomCostFinal+perDiemCostFinal;
+
+    el('sumTravel').textContent = fmt(travelCost)+' บาท';
+    el('sumAccom').textContent = fmt(accomCostFinal)+' บาท';
+    el('sumPerDiem').textContent = fmt(perDiemCostFinal)+' บาท';
+    el('sumTotal').textContent = fmt(total)+' บาท';
+    el('grandTotalInline').textContent = fmt(total)+' บาท';
+    el('sumApprovedTravel').textContent = fmt(travelCost)+' บาท';
+
+    return {travelCost, fuelRate, accomCost:accomCostFinal, accomBreakdown, accomNights:nights, accomRooms, perDiemCost:perDiemCostFinal, perDiemBreakdown, total, distance, nights, pdDays};
+  }
+
+  // ---------- Trip type: "ไป-กลับ (ไม่ค้างคืน)" vs "ค้างคืน" ----------
+  // Day-trip (no overnight stay) requests never need accommodation or per-diem — those two
+  // sections are hidden entirely and their cost is forced to zero in recalcCosts() above.
+  // "ค้างคืน" keeps every section visible, exactly as the form behaved before this feature.
+  let tripType = 'overnight'; // 'oneday' | 'overnight'
+  function applyTripType(){
+    document.querySelectorAll('.trip-type-btn').forEach(b=> b.classList.toggle('active', b.dataset.trip===tripType));
+    const isOneDay = tripType === 'oneday';
+    el('accomSection').style.display = isOneDay ? 'none' : '';
+    el('perDiemSection').style.display = isOneDay ? 'none' : '';
+    el('sumAccomRow').style.display = isOneDay ? 'none' : '';
+    el('sumPerDiemRow').style.display = isOneDay ? 'none' : '';
+    recalcCosts();
+    updateSaveButtonState();
+  }
+  document.querySelectorAll('.trip-type-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      tripType = btn.dataset.trip;
+      applyTripType();
+    });
+  });
+  renderAccomList();
+  renderPerDiemList();
+  applyTripType();
+
+  function buildRecord(){
+    const c = recalcCosts();
+    const purpose = el('purpose').value==='อื่น ๆ' ? ('อื่น ๆ: '+(el('purposeOther').value||'-')) : el('purpose').value;
+    const helperNames = helperNamesValues
+      .filter(v=>v && (v.name||'').trim()!=='')
+      .map(v=>({prefix:v.prefix||'นาย', name:(v.name||'').trim(), code:(v.code||'').trim(), position:(v.position||'').trim()}));
+    return {
+      id: 'rec_'+Date.now()+'_'+Math.random().toString(36).slice(2,8),
+      fillDate: el('fillDate').value,
+      empPrefix: el('empPrefix').value,
+      empName: el('empName').value.trim(),
+      empCode: el('empCode').value.trim(),
+      position: el('position').value.trim(),
+      helperCount: Number(el('helperCount').value)||1,
+      helperNames,
+      purpose,
+      tripType,
+      departDate: el('departDate').value,
+      returnDate: el('returnDate').value,
+      workDays: el('workDays').value,
+      vehicleType: el('vehicleType').value,
+      vehiclePlate: el('vehiclePlate').value.trim(),
+      vehicleBrand: el('vehicleBrand').value.trim(),
+      startPoint: el('startPoint').value.trim(),
+      endPoint: el('endPoint').value.trim(),
+      distanceKm: c.distance,
+      fuelRate: c.fuelRate,
+      travelCost: c.travelCost,
+      approvedTravelCost: c.travelCost,
+      accomNights: c.nights,
+      accomRooms: c.accomRooms,
+      accomBreakdown: c.accomBreakdown,
+      accomCost: c.accomCost,
+      perDiemDays: c.pdDays,
+      perDiemBreakdown: c.perDiemBreakdown,
+      perDiemCost: c.perDiemCost,
+      totalCost: c.total,
+      remarks: el('remarks').value.trim(),
+      licenseFile: uploadedFiles.license || null,
+      insuranceFile: uploadedFiles.insurance || null,
+      status: 'pending', // pending -> approved / rejected by an approver, or cancelled by the requester if entered wrong
+      createdAt: new Date().toISOString()
+    };
+  }
+
+  function getValidationError(rec){
+    if(!rec.empName) return 'กรุณากรอกชื่อพนักงาน';
+    if(!rec.empCode) return 'กรุณากรอกรหัสพนักงาน';
+    if(!rec.position) return 'กรุณากรอกตำแหน่งงาน';
+    if(!rec.purpose || /อื่น ๆ: -$/.test(rec.purpose)) return 'กรุณาระบุวัตถุประสงค์การเดินทาง';
+    if(!rec.departDate || !rec.returnDate) return 'กรุณาระบุวันที่เดินทางไป-กลับ';
+    if(!rec.vehiclePlate) return 'กรุณากรอกทะเบียนรถ';
+    if(!rec.vehicleBrand) return 'กรุณากรอกยี่ห้อรถ';
+    if(!rec.startPoint || !rec.endPoint) return 'กรุณาระบุจุดเริ่มต้นและจุดปลายทาง';
+    if(!rec.distanceKm) return 'กรุณากรอกระยะทางตาม GPS';
+    if(rec.tripType !== 'oneday'){
+      if(!rec.perDiemBreakdown || !rec.perDiemBreakdown.length || rec.perDiemBreakdown.some(b=>!b.rate)) return 'กรุณาเลือกระดับตำแหน่งและพื้นที่ปฏิบัติงานให้ครบทุกคน';
+      if(!rec.accomBreakdown || !rec.accomBreakdown.length || rec.accomBreakdown.some(b=>!b.rate)) return 'กรุณาเลือกระดับตำแหน่งและพื้นที่ที่พักให้ครบทุกห้อง';
+    }
+    if(rec.helperCount>1 && (!rec.helperNames || rec.helperNames.length < rec.helperCount-1)) return 'กรุณากรอกชื่อพนักงานที่เดินทางร่วมให้ครบทุกคน';
+    if(!rec.licenseFile) return 'กรุณาแนบรูปหรือไฟล์ใบขับขี่ก่อนบันทึก';
+    if(!rec.insuranceFile) return 'กรุณาแนบสำเนากรมธรรม์ พ.ร.บ. รถยนต์ก่อนบันทึก';
+    return null;
+  }
+  function isFormComplete(){
+    return getValidationError(buildRecord()) === null;
+  }
+  function validateForm(rec){
+    const err = getValidationError(rec);
+    if(err){ toast(err); return false; }
+    return true;
+  }
+  function updateSaveButtonState(){
+    el('saveBtn').disabled = !isFormComplete();
+  }
+  // Re-check completeness on any change within the form so the save button only becomes
+  // clickable once every required field is filled in — per requirement #5.
+  document.getElementById('tab-form').addEventListener('input', updateSaveButtonState);
+  document.getElementById('tab-form').addEventListener('change', updateSaveButtonState);
+
+  function clearForm(){
+    el('fillDate').value = todayStr();
+    el('fillDateText').value = isoToThaiDMY(todayStr());
+    ['empName','empCode','position','startPoint','endPoint','distanceKm','purposeOther','vehiclePlate','vehicleBrand'].forEach(id=>el(id).value='');
+    el('empPrefix').value = 'นาย';
+    el('vehicleType').value = 'รถยนต์ (รถน้ำมัน)';
+    applyFuelRate();
+    el('helperCount').value = 1;
+    helperNamesValues = [];
+    renderHelperNames();
+    el('purpose').value = 'ช่วยเหลืองานต่าง DC';
+    el('purposeOther').style.display='none';
+    el('departDate').value=''; el('departDateText').value='';
+    el('returnDate').value=''; el('returnDateText').value='';
+    el('workDays').value='0 วัน'; el('accomNights').value=0; el('perDiemDays').value=0;
+    el('remarks').value='';
+    el('accomRoomCount').value=1;
+    accomValues = [{level:'lv10', area:'bkk'}];
+    renderAccomList();
+    perDiemValues = [{level:'lv10', area:'bkk'}];
+    renderPerDiemList();
+    uploadedFiles.license = null; uploadedFiles.insurance = null;
+    el('licenseFileInput').value=''; el('insuranceFileInput').value='';
+    renderFilePreview('license'); renderFilePreview('insurance');
+    tripType = 'overnight';
+    applyTripType();
+    updateSaveButtonState();
+    setFormReadOnly(false);
+  }
+
+  // ---------- View-only mode (for viewing an already-saved record's details) ----------
+  // Reuses the same form layout the person already knows, but disables every field so a
+  // previously submitted request can be viewed without being editable (issue #3).
+  let currentViewedRecord = null; // the record currently shown read-only, so the approve/reject
+                                   // buttons on this page know which request to act on
+  // Where the "←" back button on the read-only view should return to. null = default
+  // behaviour (overview if allowed, else home). 'success' = came from the "ดูข้อมูล" button
+  // on the just-saved success page, so back should return there instead.
+  let viewOnlyReturnTab = null;
+  function setFormReadOnly(readOnly){
+    document.querySelectorAll('#tab-form input, #tab-form select, #tab-form textarea').forEach(elm=>{
+      elm.disabled = readOnly;
+    });
+    document.querySelectorAll('#tab-form .date-icon-btn').forEach(btn=>{ btn.style.display = readOnly ? 'none' : ''; });
+    document.querySelectorAll('#tab-form .file-remove').forEach(btn=>{ btn.style.display = readOnly ? 'none' : ''; });
+    el('saveBtn').style.display = readOnly ? 'none' : '';
+    el('clearBtn').style.display = readOnly ? 'none' : '';
+    el('viewOnlyBanner').style.display = readOnly ? 'flex' : 'none';
+    if(!readOnly){
+      el('approveRejectRow').style.display = 'none';
+      el('viewOnlyCancelRow').style.display = 'none';
+      if(el('viewOnlyStatusBadge')) el('viewOnlyStatusBadge').innerHTML = '';
+    }
+  }
+  el('viewOnlyBackBtn').addEventListener('click', ()=>{
+    clearForm();
+    if(viewOnlyReturnTab === 'success'){
+      viewOnlyReturnTab = null;
+      showTab('success');
+    } else {
+      goOverviewIfAllowed();
+    }
+  });
+  el('viewOnlyApproveBtn').addEventListener('click', async ()=>{
+    if(!currentViewedRecord) return;
+    el('viewOnlyApproveBtn').disabled = true; el('viewOnlyRejectBtn').disabled = true;
+    const ok = await decideRecordFlow(currentViewedRecord, 'approved');
+    if(ok){
+      currentViewedRecord.status = 'approved';
+      el('approveRejectRow').style.display = 'none';
+    }
+    el('viewOnlyApproveBtn').disabled = false; el('viewOnlyRejectBtn').disabled = false;
+  });
+  el('viewOnlyRejectBtn').addEventListener('click', async ()=>{
+    if(!currentViewedRecord) return;
+    el('viewOnlyApproveBtn').disabled = true; el('viewOnlyRejectBtn').disabled = true;
+    const ok = await decideRecordFlow(currentViewedRecord, 'rejected');
+    if(ok){
+      currentViewedRecord.status = 'rejected';
+      el('approveRejectRow').style.display = 'none';
+    }
+    el('viewOnlyApproveBtn').disabled = false; el('viewOnlyRejectBtn').disabled = false;
+  });
+  el('viewOnlyCancelBtn').addEventListener('click', async ()=>{
+    if(!currentViewedRecord) return;
+    el('viewOnlyCancelBtn').disabled = true;
+    try{
+      const ok = await cancelRecordFlow(currentViewedRecord);
+      if(ok){
+        currentViewedRecord.status = 'cancelled';
+        el('viewOnlyStatusBadge').innerHTML = '<span class="badge-cancelled">ยกเลิกแล้ว</span>';
+        el('viewOnlyCancelRow').style.display = 'none';
+        el('approveRejectRow').style.display = 'none';
+      }
+    }catch(e){
+      console.error('cancel from form view failed', e);
+      toast('เกิดข้อผิดพลาดในการยกเลิกรายการ');
+    }
+    el('viewOnlyCancelBtn').disabled = false;
+  });
+  el('clearBtn').addEventListener('click', clearForm);
+
+  // ---------- Load a saved record back into the form (from the "รายละเอียด" button) ----------
+  const KNOWN_PURPOSES = [
+    'ช่วยเหลืองานต่าง DC','ทดแทนกำลังคนในกรณีพนักงานขาด หรือลาหยุด','เปิด DC/DP ใหม่ หรือย้ายพื้นที่',
+    'ช่วยดำเนินงานตามแผนงานของบริษัท','ฝึกอบรมและถ่ายทอดวิธีการทำงานให้กับพนักงาน','ช่วยเหลืองานที่ Shop'
+  ];
+  // Records saved before the wording was updated still carry the old text — map it forward
+  // so old requests still show the right option instead of falling into "อื่น ๆ".
+  const LEGACY_PURPOSE_MAP = { 'การเปิด DC ใหม่ หรือย้ายพื้นที่': 'เปิด DC/DP ใหม่ หรือย้ายพื้นที่' };
+  function populateFormFromRecord(rec, readOnly){
+    clearForm();
+
+    el('fillDate').value = rec.fillDate || todayStr();
+    el('fillDateText').value = isoToThaiDMY(el('fillDate').value);
+    el('empPrefix').value = rec.empPrefix || 'นาย';
+    el('empName').value = rec.empName || '';
+    el('empCode').value = rec.empCode || '';
+    el('position').value = rec.position || '';
+
+    const total = Math.max(1, Math.floor(Number(rec.helperCount))||1);
+    el('helperCount').value = total;
+    helperNamesValues = (rec.helperNames||[]).map(h=>({prefix:h.prefix||'นาย', name:h.name||'', code:h.code||'', position:h.position||''}));
+    while(helperNamesValues.length < total-1) helperNamesValues.push({prefix:'นาย',name:'',code:'',position:''});
+    helperNamesValues.length = Math.max(0, total-1);
+    renderHelperNames();
+
+    const normalizedPurpose = rec.purpose && LEGACY_PURPOSE_MAP[rec.purpose] ? LEGACY_PURPOSE_MAP[rec.purpose] : rec.purpose;
+    if(normalizedPurpose && normalizedPurpose.indexOf('อื่น ๆ: ')===0){
+      el('purpose').value = 'อื่น ๆ';
+      el('purposeOther').value = normalizedPurpose.slice('อื่น ๆ: '.length);
+      el('purposeOther').style.display = 'block';
+    } else if(normalizedPurpose && KNOWN_PURPOSES.indexOf(normalizedPurpose)!==-1){
+      el('purpose').value = normalizedPurpose;
+      el('purposeOther').style.display = 'none';
+    } else if(normalizedPurpose){
+      el('purpose').value = 'อื่น ๆ';
+      el('purposeOther').value = normalizedPurpose;
+      el('purposeOther').style.display = 'block';
+    }
+
+    el('departDate').value = rec.departDate || '';
+    el('departDateText').value = isoToThaiDMY(rec.departDate);
+    el('returnDate').value = rec.returnDate || '';
+    el('returnDateText').value = isoToThaiDMY(rec.returnDate);
+
+    el('vehicleType').value = rec.vehicleType || 'รถยนต์ (รถน้ำมัน)';
+    applyFuelRate();
+    el('vehiclePlate').value = rec.vehiclePlate || '';
+    el('vehicleBrand').value = rec.vehicleBrand || '';
+
+    el('startPoint').value = rec.startPoint || '';
+    el('endPoint').value = rec.endPoint || '';
+    el('distanceKm').value = rec.distanceKm ? (Number(rec.distanceKm)/2) : '';
+
+    accomValues = (rec.accomBreakdown && rec.accomBreakdown.length)
+      ? rec.accomBreakdown.map(b=>({level:b.level||'lv10', area:b.area||'bkk'}))
+      : [{level:'lv10', area:'bkk'}];
+    el('accomRoomCount').value = accomValues.length;
+    renderAccomList();
+
+    perDiemValues = (rec.perDiemBreakdown && rec.perDiemBreakdown.length)
+      ? rec.perDiemBreakdown.map(b=>({level:b.level||'lv10', area:b.area||'bkk'}))
+      : [{level:'lv10', area:'bkk'}];
+    renderPerDiemList();
+
+    el('remarks').value = rec.remarks || '';
+
+    recalcDates(); // recomputes workDays / accomNights / perDiemDays and calls recalcCosts()
+
+    tripType = (rec.tripType === 'oneday') ? 'oneday' : 'overnight';
+    applyTripType();
+
+    uploadedFiles.license = rec.licenseFile || null;
+    uploadedFiles.insurance = rec.insuranceFile || null;
+    renderFilePreview('license');
+    renderFilePreview('insurance');
+
+    showTab('form');
+    if(readOnly){
+      currentViewedRecord = rec;
+      setFormReadOnly(true);
+      const st = rec.status || 'pending';
+      const canDecide = hasApproverAccess() && st === 'pending';
+      el('approveRejectRow').style.display = canDecide ? 'flex' : 'none';
+      el('viewOnlyCancelRow').style.display = (st === 'cancelled') ? 'none' : 'flex';
+      let statusHtml = '<span class="badge-pending">รออนุมัติ</span>';
+      if(st==='cancelled') statusHtml = `<span class="badge-cancelled">ยกเลิกแล้ว</span>`;
+      else if(st==='approved') statusHtml = `<span class="badge-approved">อนุมัติแล้ว</span>`;
+      else if(st==='rejected') statusHtml = `<span class="badge-rejected">ไม่อนุมัติ</span>`;
+      el('viewOnlyStatusBadge').innerHTML = statusHtml;
+      el('viewOnlyBackBtn').textContent = viewOnlyReturnTab === 'success' ? 'กลับไปหน้าบันทึกสำเร็จ →' : (hasOverviewAccess() ? '← กลับไปหน้าภาพรวม' : '← กลับหน้าแรก');
+      toast('กำลังแสดงข้อมูลคำขอเบิกงบ (อ่านอย่างเดียว)');
+    } else {
+      currentViewedRecord = null;
+      el('approveRejectRow').style.display = 'none';
+      el('viewOnlyCancelRow').style.display = 'none';
+      toast('โหลดข้อมูลคำขอเบิกงบเข้าสู่แบบฟอร์มแล้ว — แก้ไขและกดบันทึกเพื่ออัปเดต');
+    }
+  }
+
+  // ---------- Storage ----------
+  // Each request is saved under its own key (record:<id>) with a shared index list of ids.
+  // This avoids the previous design (one giant array under a single key), which could fail
+  // to save once the combined size of all records + attached files grew too large.
+  //
+  // window.storage is only injected when this page runs inside a Claude.ai artifact. When the
+  // page is hosted on its own (e.g. this Netlify deployment), window.storage does not exist and
+  // every save previously failed with "window.storage is undefined". The shim below falls back
+  // to localStorage in that case, so saving works the same way when self-hosted.
+  // NOTE: localStorage is per-browser, so on a standalone deployment "shared" data is only
+  // shared across tabs on the SAME device/browser — not across different users' computers.
+  const storage = (function(){
+    if(window.storage && typeof window.storage.get === 'function'){
+      return window.storage;
+    }
+    console.warn('window.storage ไม่พบ (ไม่ได้รันในสภาพแวดล้อม Claude artifact) — ใช้ localStorage ของเบราว์เซอร์แทน');
+    const LS_PREFIX = 'nim_travel_budget::';
+    return {
+      async get(key){
+        try{
+          const raw = localStorage.getItem(LS_PREFIX+key);
+          if(raw===null) return null;
+          return {key, value: raw};
+        }catch(e){ return null; }
+      },
+      async set(key, value){
+        try{
+          localStorage.setItem(LS_PREFIX+key, value);
+          return {key, value};
+        }catch(e){ console.error('localStorage set failed', e); return null; }
+      },
+      async delete(key){
+        try{
+          localStorage.removeItem(LS_PREFIX+key);
+          return {key, deleted:true};
+        }catch(e){ return null; }
+      },
+      async list(prefix){
+        try{
+          const keys = [];
+          for(let i=0;i<localStorage.length;i++){
+            const k = localStorage.key(i);
+            if(k && k.startsWith(LS_PREFIX)){
+              const bare = k.slice(LS_PREFIX.length);
+              if(!prefix || bare.startsWith(prefix)) keys.push(bare);
+            }
+          }
+          return {keys, prefix};
+        }catch(e){ return null; }
+      }
+    };
+  })();
+
+  const RECORD_PREFIX = 'record:';
+  const INDEX_KEY = 'record-index';
+
+  async function loadIndex(){
+    try{
+      const r = await storage.get(INDEX_KEY, true);
+      return r && r.value ? JSON.parse(r.value) : [];
+    }catch(e){ return []; }
+  }
+  async function saveIndex(ids){
+    try{
+      const ok = await storage.set(INDEX_KEY, JSON.stringify(ids), true);
+      return !!ok;
+    }catch(e){ console.error('saveIndex failed', e); return false; }
+  }
+
+  // Records saved to THIS browser only (window.storage / localStorage). Kept as a fallback
+  // and as the source for locally-cached attachment files — see loadRecords() below for the
+  // combined view that also pulls in everyone else's records from the Google Sheet.
+  async function loadLocalRecords(){
+    const ids = await loadIndex();
+    const out = [];
+    for(const id of ids){
+      try{
+        const r = await storage.get(RECORD_PREFIX+id, true);
+        if(r && r.value) out.push(JSON.parse(r.value));
+      }catch(e){
+        // Individual record missing/corrupted — skip it rather than failing the whole list
+        console.warn('skip unreadable record', id, e);
+      }
+    }
+    return out;
+  }
+
+  // Combined view used everywhere in the UI: Google Sheet (shared across everyone who opens
+  // this link) is the source of truth when reachable, merged with any records saved on this
+  // browser that haven't made it to the Sheet yet (e.g. saved while offline, or the Sheet
+  // fetch failed). Sheet records win on id collisions since the Sheet is the shared copy.
+  async function loadRecords(){
+    const [sheetRecords, localRecords] = await Promise.all([
+      fetchRecordsFromSheet(),
+      loadLocalRecords()
+    ]);
+    let combined;
+    if(sheetRecords.length===0){
+      combined = localRecords; // Sheet not configured/unreachable — fall back to local only
+    } else {
+      const byId = new Map();
+      sheetRecords.forEach(r=>{ if(r && r.id) byId.set(r.id, r); });
+      localRecords.forEach(r=>{ if(r && r.id && !byId.has(r.id)) byId.set(r.id, r); });
+      combined = Array.from(byId.values());
+    }
+    return dedupeLatestByTrip(combined);
+  }
+
+  // If the same trip request was ever saved more than once (same person, same route, same
+  // travel dates), keep only the most recently saved copy so KPIs/charts/tables downstream
+  // never double-count or show a stale duplicate (issue #4).
+  function dedupeLatestByTrip(records){
+    const byKey = new Map();
+    records.forEach(r=>{
+      if(!r) return;
+      const key = [r.empCode||'', r.empName||'', r.departDate||'', r.returnDate||'', r.startPoint||'', r.endPoint||''].join('|');
+      const existing = byKey.get(key);
+      if(!existing || new Date(r.createdAt||0) >= new Date(existing.createdAt||0)){
+        byKey.set(key, r);
+      }
+    });
+    return Array.from(byKey.values());
+  }
+
+  // Records from loadRecords() only carry file *metadata* (name/type/isImage) — the actual
+  // base64 image data is stored under its own key to keep the main record small. This fetches
+  // the full attachment data on demand, e.g. right before showing/printing a record's details.
+  async function loadRecordWithFiles(r){
+    const rec = {...r};
+    try{
+      if(rec.licenseFile){
+        const lic = await storage.get(RECORD_PREFIX+rec.id+':license', true);
+        if(lic && lic.value) rec.licenseFile = JSON.parse(lic.value);
+      }
+    }catch(e){ console.warn('โหลดไฟล์ใบขับขี่ไม่สำเร็จ', e); }
+    try{
+      if(rec.insuranceFile){
+        const ins = await storage.get(RECORD_PREFIX+rec.id+':insurance', true);
+        if(ins && ins.value) rec.insuranceFile = JSON.parse(ins.value);
+      }
+    }catch(e){ console.warn('โหลดไฟล์สำเนากรมธรรม์ไม่สำเร็จ', e); }
+    return rec;
+  }
+
+  async function saveRecord(rec){
+    try{
+      // Attached files (license / insurance) can be large once base64-encoded (especially PDFs,
+      // which aren't compressed like images). Storing them inline inside the main record risked
+      // pushing a single storage key over its size limit and silently failing the save.
+      // We now store each attached file under its own key, and keep only lightweight metadata
+      // (name/type/isImage) inside the main record.
+      const slim = {...rec};
+      if(rec.licenseFile){
+        const fOk = await storage.set(RECORD_PREFIX+rec.id+':license', JSON.stringify(rec.licenseFile), true);
+        if(!fOk) return {ok:false, reason:'บันทึกไฟล์ใบขับขี่ไม่สำเร็จ (ไฟล์อาจมีขนาดใหญ่เกินไป)'};
+        slim.licenseFile = {name:rec.licenseFile.name, type:rec.licenseFile.type, isImage:rec.licenseFile.isImage};
+      }
+      if(rec.insuranceFile){
+        const fOk = await storage.set(RECORD_PREFIX+rec.id+':insurance', JSON.stringify(rec.insuranceFile), true);
+        if(!fOk) return {ok:false, reason:'บันทึกไฟล์สำเนากรมธรรม์ พ.ร.บ. ไม่สำเร็จ (ไฟล์อาจมีขนาดใหญ่เกินไป)'};
+        slim.insuranceFile = {name:rec.insuranceFile.name, type:rec.insuranceFile.type, isImage:rec.insuranceFile.isImage};
+      }
+      const ok = await storage.set(RECORD_PREFIX+rec.id, JSON.stringify(slim), true);
+      if(!ok) return {ok:false, reason:'เขียนข้อมูลลง Storage ไม่สำเร็จ'};
+      const ids = await loadIndex();
+      if(!ids.includes(rec.id)) ids.push(rec.id);
+      const idxOk = await saveIndex(ids);
+      if(!idxOk) return {ok:false, reason:'บันทึกดัชนีรายการไม่สำเร็จ'};
+      return {ok:true};
+    }catch(e){
+      console.error('saveRecord failed', e);
+      const msg = (e && e.message) ? e.message : String(e);
+      return {ok:false, reason: msg};
+    }
+  }
+
+  // ---------- Google Sheet sync (Apps Script Web App) ----------
+  // Paste the "Web app" URL you get from Google Apps Script > Deploy > New deployment here.
+  // Leave it as '' to disable this — the form will keep saving to its own storage as before,
+  // it just won't also copy each record to a Google Sheet.
+  const GOOGLE_SHEET_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbz-8ClsjZE-1q3wLtxuy5CkgI_-12GXiNoH0Fv8cEa3JylGUurM28aw1CwrbTqoRQehuA/exec';
+
+  // Strips large attachment bytes out of a record before it goes into the Sheet's hidden
+  // "raw data" column — mirrors the "slim" version saveRecord() keeps in local storage.
+  // Keeps the Sheet cell small and avoids ever putting file contents in the spreadsheet.
+  function recordToRawForSheet(rec){
+    const slim = {...rec};
+    if(rec.licenseFile){
+      slim.licenseFile = {name:rec.licenseFile.name, type:rec.licenseFile.type, isImage:rec.licenseFile.isImage};
+      if(rec.licenseFile.url) slim.licenseFile.url = rec.licenseFile.url;
+      if(rec.licenseFile.openUrl) slim.licenseFile.openUrl = rec.licenseFile.openUrl;
+      if(rec.licenseFile.fileId) slim.licenseFile.fileId = rec.licenseFile.fileId;
+    }
+    if(rec.insuranceFile){
+      slim.insuranceFile = {name:rec.insuranceFile.name, type:rec.insuranceFile.type, isImage:rec.insuranceFile.isImage};
+      if(rec.insuranceFile.url) slim.insuranceFile.url = rec.insuranceFile.url;
+      if(rec.insuranceFile.openUrl) slim.insuranceFile.openUrl = rec.insuranceFile.openUrl;
+      if(rec.insuranceFile.fileId) slim.insuranceFile.fileId = rec.insuranceFile.fileId;
+    }
+    return slim;
+  }
+
+  async function sendToGoogleSheet(rec, filesToUpload){
+    if(!GOOGLE_SHEET_WEBAPP_URL || GOOGLE_SHEET_WEBAPP_URL.indexOf('PASTE_YOUR_')===0) return;
+    try{
+      // Content-Type is deliberately 'text/plain' (not 'application/json'): sending JSON
+      // triggers a CORS preflight (OPTIONS) request that Apps Script Web Apps don't answer,
+      // which makes the request fail. Apps Script's doPost still reads the raw body fine
+      // via e.postData.contents and we JSON.parse it there.
+      //
+      // We send two things: "display" (the human-readable Thai columns, same as before —
+      // what you see when you open the Sheet) and "raw" (the full record as JSON, tucked
+      // into a hidden __raw_json__ column). The dashboard reads the "raw" column back via
+      // doGet so every browser that opens this page sees the same list of requests — see
+      // fetchRecordsFromSheet() below.
+      //
+      // "files" (only sent from the initial save — see the saveBtn handler) carries the raw
+      // base64 bytes of any attached license/insurance file so Apps Script can upload them to
+      // Google Drive and hand back a public view URL. That URL gets embedded in the Sheet's
+      // raw JSON, which is what makes attachments viewable from ANY device from now on —
+      // previously the image bytes only ever lived in the submitter's own browser storage.
+      const body = { display: recordToRow(rec), raw: recordToRawForSheet(rec), approverEmail: APPROVER_EMAIL };
+      if(filesToUpload && (filesToUpload.license || filesToUpload.insurance)){
+        body.files = filesToUpload;
+      }
+      const res = await fetch(GOOGLE_SHEET_WEBAPP_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(body)
+      });
+      if(filesToUpload){
+        try{
+          const data = await res.json();
+          if(data && data.files) await mergeUploadedFileUrls(rec.id, data.files);
+        }catch(e){ /* การอ่านผลลัพธ์ล้มเหลว — ไม่กระทบการบันทึกหลักซึ่งสำเร็จไปแล้ว */ }
+      }
+    }catch(e){
+      // Sending to the Sheet is a best-effort background copy — never let a failure here
+      // (wrong URL, no connection to Google, etc.) block or fail the normal save flow.
+      console.warn('ส่งข้อมูลไปยัง Google Sheet ไม่สำเร็จ (ข้อมูลยังถูกบันทึกในระบบตามปกติ)', e);
+    }
+  }
+
+  // หลังอัปโหลดไฟล์แนบขึ้น Drive สำเร็จ อัปเดตสำเนาไฟล์ที่บันทึกไว้ในเบราว์เซอร์นี้ให้มี url/fileId
+  // ด้วย เพื่อให้แม้แต่เครื่องที่แนบไฟล์เองก็จะอ้างอิง URL กลางนี้ได้ในครั้งต่อ ๆ ไป (เช่น ตอนกด
+  // ยกเลิก/ดูรายละเอียดซ้ำ) แทนที่จะพึ่งแต่ dataUrl ที่อยู่ในเครื่องนี้เท่านั้น
+  async function mergeUploadedFileUrls(recordId, filesResult){
+    for (const key of ['license','insurance']) {
+      const info = filesResult[key];
+      if(!info || !info.url) continue;
+      try{
+        const storageKey = RECORD_PREFIX+recordId+':'+key;
+        const existing = await storage.get(storageKey, true);
+        if(existing && existing.value){
+          const fileObj = JSON.parse(existing.value);
+          fileObj.url = info.url;
+          fileObj.openUrl = info.openUrl || info.url;
+          fileObj.fileId = info.fileId;
+          await storage.set(storageKey, JSON.stringify(fileObj), true);
+        }
+      }catch(e){ console.warn('บันทึก URL ไฟล์แนบไม่สำเร็จ', e); }
+    }
+  }
+
+  // Fetches everyone's records back from the Google Sheet (via the doGet function added to
+  // the Apps Script project) so the "รายการขออนุมัติเบิกงบ" table shows the same list no
+  // matter who opens the link or which browser they use.
+  async function fetchRecordsFromSheet(){
+    if(!GOOGLE_SHEET_WEBAPP_URL || GOOGLE_SHEET_WEBAPP_URL.indexOf('PASTE_YOUR_')===0) return [];
+    try{
+      const res = await fetch(GOOGLE_SHEET_WEBAPP_URL + '?action=list', { method:'GET' });
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const data = await res.json();
+      return Array.isArray(data.records) ? data.records : [];
+    }catch(e){
+      // Falls back to whatever loadRecords() has locally — see loadRecords() above.
+      console.warn('โหลดรายการจาก Google Sheet ไม่สำเร็จ (จะแสดงเฉพาะข้อมูลในเบราว์เซอร์นี้แทน)', e);
+      return [];
+    }
+  }
+
+  // ดึงข้อมูลไฟล์แนบ (ใบขับขี่ / สำเนากรมธรรม์) เป็น base64 dataUrl ผ่าน Apps Script โดยตรง
+  // (ไม่ใช้ URL ของ Google Drive/lh3.googleusercontent.com ตรง ๆ ใน <img> สำหรับตอนสร้าง PDF)
+  // เหตุผล: html2canvas ต้องอ่านค่าสีของรูปเพื่อวาดลง PDF ซึ่งต้องมี CORS header ที่ถูกต้องจากปลายทาง
+  // แต่ลิงก์รูปของ Google Drive ไม่ส่ง header นี้มาให้เว็บอื่นอ่านได้ ทำให้เบราว์เซอร์ของคนที่เปิดดู
+  // จากเครื่อง/บัญชีอื่น (ไม่ใช่คนที่แนบไฟล์เอง) วาดรูปลง PDF ไม่ได้ กลายเป็นช่องว่างแทน — Apps Script
+  // ของเราเอง (ที่ใช้ดึงรายการอยู่แล้ว) ไม่ติดปัญหานี้ เพราะเรียกแบบ GET ธรรมดาเหมือน ?action=list
+  // และส่งข้อมูลกลับมาเป็น base64 ฝังในตัวเอง (data:) ซึ่ง canvas วาดได้เสมอไม่ว่าใครเป็นคนเปิด
+  const attachmentDataUrlCache = new Map();
+  async function fetchAttachmentDataUrl(fileId){
+    if(!fileId) return null;
+    if(attachmentDataUrlCache.has(fileId)) return attachmentDataUrlCache.get(fileId);
+    if(!GOOGLE_SHEET_WEBAPP_URL || GOOGLE_SHEET_WEBAPP_URL.indexOf('PASTE_YOUR_')===0) return null;
+    try{
+      const res = await fetch(GOOGLE_SHEET_WEBAPP_URL + '?action=file&fileId=' + encodeURIComponent(fileId), { method:'GET' });
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const data = await res.json();
+      const dataUrl = (data && data.ok && data.dataUrl) ? data.dataUrl : null;
+      attachmentDataUrlCache.set(fileId, dataUrl);
+      return dataUrl;
+    }catch(e){
+      console.warn('โหลดรูปไฟล์แนบสำหรับ PDF ไม่สำเร็จ (fileId: '+fileId+')', e);
+      attachmentDataUrlCache.set(fileId, null);
+      return null;
+    }
+  }
+
+  // เติม dataUrl ให้ licenseFile/insuranceFile ของ record ก่อนสร้าง PDF ถ้ายังไม่มี (เช่น record
+  // ที่โหลดมาจาก Google Sheet ซึ่งมีแค่ fileId/url ไม่มี dataUrl ในเครื่องนี้) — ทำงานแบบ non-mutating
+  // (คืน record ใหม่) เพื่อไม่ไปแก้ข้อมูลต้นฉบับที่แบบฟอร์ม/ตารางกำลังใช้แสดงผลอยู่
+  async function hydrateAttachmentsForPdf(rec){
+    const out = {...rec};
+    for (const key of ['licenseFile','insuranceFile']) {
+      const f = out[key];
+      if(f && !f.dataUrl && f.isImage && f.fileId){
+        const dataUrl = await fetchAttachmentDataUrl(f.fileId);
+        if(dataUrl) out[key] = {...f, dataUrl};
+      }
+    }
+    return out;
+  }
+
+  let lastSavedRecord = null;
+  function showSuccessPage(rec){
+    lastSavedRecord = rec;
+    const box = el('successSummary');
+    const helperLine = rec.helperCount>1 ? `<div class="srow"><span>จำนวนผู้ร่วมเดินทาง</span><span>${rec.helperCount} คน</span></div>` : '';
+    box.innerHTML = `
+      <div class="srow"><span>ชื่อพนักงาน</span><span>${((rec.empPrefix||'')+(rec.empName||''))||'-'}</span></div>
+      <div class="srow"><span>วันที่เดินทาง</span><span>${isoToThaiDMY(rec.departDate)||'-'} — ${isoToThaiDMY(rec.returnDate)||'-'}</span></div>
+      <div class="srow"><span>เส้นทาง</span><span>${rec.startPoint||'-'} → ${rec.endPoint||'-'}</span></div>
+      ${helperLine}
+      <div class="srow"><span>ประมาณการค่าใช้จ่ายรวม</span><span>${fmt(rec.totalCost)} บาท</span></div>
+    `;
+    el('successPdfBtn').style.display = '';
+    el('successCancelBtn').style.display = '';
+    el('successNewFormBtn').style.display = 'none';
+    showTab('success');
+  }
+
+  el('saveBtn').addEventListener('click', async ()=>{
+    const rec = buildRecord();
+    if(!validateForm(rec)) return;
+    el('saveBtn').disabled = true;
+    const result = await saveRecord(rec);
+    el('saveBtn').disabled = false;
+    if(result.ok){
+      toast('บันทึกข้อมูลเรียบร้อยแล้ว');
+      // ส่งไฟล์แนบ (bytes จริง) ไปให้ Apps Script อัปโหลดขึ้น Google Drive เฉพาะตอนบันทึกคำขอใหม่นี้
+      // เท่านั้น (ไม่ใช่ตอนอนุมัติ/ยกเลิกภายหลัง) เพื่อให้ทุกอุปกรณ์เปิดดูรูปที่แนบได้ในภายหลัง
+      const filesToUpload = {};
+      if(rec.licenseFile && rec.licenseFile.dataUrl){
+        filesToUpload.license = {name:rec.licenseFile.name, type:rec.licenseFile.type, isImage:rec.licenseFile.isImage, dataUrl:rec.licenseFile.dataUrl};
+      }
+      if(rec.insuranceFile && rec.insuranceFile.dataUrl){
+        filesToUpload.insurance = {name:rec.insuranceFile.name, type:rec.insuranceFile.type, isImage:rec.insuranceFile.isImage, dataUrl:rec.insuranceFile.dataUrl};
+      }
+      sendToGoogleSheet(rec, filesToUpload); // fire-and-forget background copy to Google Sheet, if configured
+      try{
+        await refreshOverview();
+      }catch(e){
+        console.error('refreshOverview failed after save', e);
+      }
+      showSuccessPage(rec);
+      clearForm();
+    } else {
+      toast('เกิดข้อผิดพลาดในการบันทึก: '+(result.reason||'ไม่ทราบสาเหตุ')+' — ลองแนบไฟล์ขนาดเล็กลงแล้วลองใหม่');
+    }
+  });
+
+  el('successPdfBtn').addEventListener('click', async ()=>{
+    if(!lastSavedRecord) return;
+    await exportRecordAsPdf(lastSavedRecord);
+  });
+  el('successViewBtn').addEventListener('click', async ()=>{
+    if(!lastSavedRecord) return;
+    try{
+      const full = await loadRecordWithFiles(lastSavedRecord);
+      viewOnlyReturnTab = 'success';
+      populateFormFromRecord(full || lastSavedRecord, true);
+    }catch(e){
+      console.error('open view from success page failed', e);
+      toast('เกิดข้อผิดพลาดในการแสดงข้อมูล');
+    }
+  });
+  el('successCancelBtn').addEventListener('click', async ()=>{
+    if(!lastSavedRecord) return;
+    el('successCancelBtn').disabled = true;
+    try{
+      const ok = await cancelRecordFlow(lastSavedRecord);
+      if(ok){
+        el('successCancelBtn').style.display = 'none';
+        el('successNewFormBtn').style.display = '';
+      }
+    }catch(e){
+      console.error('cancel from success page failed', e);
+      toast('เกิดข้อผิดพลาดในการยกเลิกรายการ');
+    }
+    el('successCancelBtn').disabled = false;
+  });
+  el('successNewFormBtn').addEventListener('click', ()=>{
+    clearForm();
+    showTab('form');
+  });
+
+  // ---------- Excel export ----------
+  function recordToRow(r){
+    const helperNamesStr = (r.helperNames||[]).map(h=>`${h.prefix||''}${h.name}${h.code?' ('+h.code+')':''}${h.position?' - '+h.position:''}`).join('; ');
+    return {
+      'สถานะ': r.status==='cancelled' ? 'ยกเลิกแล้ว (ไม่นับรวม)'
+        : r.status==='approved' ? 'อนุมัติแล้ว'
+        : r.status==='rejected' ? 'ไม่อนุมัติ'
+        : 'รออนุมัติ',
+      'เหตุผลที่ยกเลิก': r.status==='cancelled' ? (r.cancelReason||'-') : '',
+      'เหตุผลที่ไม่อนุมัติ': r.status==='rejected' ? (r.decisionNote||'-') : '',
+      'วันที่กรอกข้อมูล': isoToThaiDMY(r.fillDate) + (r.createdAt ? ' ' + createdAtTime(r.createdAt) + ' น.' : ''),
+      'ชื่อพนักงาน': ((r.empPrefix||'')+(r.empName||'')),
+      'รหัสพนักงาน': r.empCode,
+      'ตำแหน่ง': r.position,
+      'จำนวนพนักงานเดินทางรวม': r.helperCount,
+      'พนักงานร่วมเดินทาง (ชื่อ/รหัส/ตำแหน่ง)': helperNamesStr,
+      'วัตถุประสงค์': r.purpose,
+      'วันที่เดินทางไป': isoToThaiDMY(r.departDate),
+      'วันที่เดินทางกลับ': isoToThaiDMY(r.returnDate),
+      'จำนวนวันทำงาน': r.workDays,
+      'ประเภทรถ': r.vehicleType,
+      'ทะเบียนรถ': r.vehiclePlate,
+      'ยี่ห้อรถ': r.vehicleBrand,
+      'จุดเริ่มต้น': r.startPoint,
+      'จุดปลายทาง': r.endPoint,
+      'ระยะทาง (กม.)': r.distanceKm,
+      'ค่าน้ำมัน (บาท/กม.)': r.fuelRate,
+      'รวมค่าเดินทาง (บาท)': r.travelCost,
+      'รวมอนุมัติค่าเดินทาง (เฉพาะค่าเดินทาง) (บาท)': r.approvedTravelCost,
+      'ค่าที่พักแยกตามห้อง': (r.accomBreakdown||[]).map((b,i)=>`ห้องที่${i+1}: ${b.levelLabel}/${b.areaLabel} ${fmt(b.rate)}บาทx${b.nights}คืน=${fmt(b.cost)}บาท`).join('; '),
+      'จำนวนคืนที่พัก': r.accomNights,
+      'จำนวนห้องพัก (รวม)': r.accomRooms,
+      'รวมค่าที่พัก (บาท)': r.accomCost,
+      'เบี้ยเลี้ยงแยกตามผู้เดินทาง': (r.perDiemBreakdown||[]).map((b,i)=>`คนที่${i+1}: ${b.levelLabel}/${b.areaLabel} ${fmt(b.rate)}บาทx${b.days}วัน=${fmt(b.cost)}บาท`).join('; '),
+      'จำนวนวันเบี้ยเลี้ยง': r.perDiemDays,
+      'รวมค่าเบี้ยเลี้ยง (บาท)': r.perDiemCost,
+      'ประมาณการค่าใช้จ่ายขออนุมัติเบิกงบเดินทาง (บาท)': r.totalCost,
+      'หมายเหตุ': r.remarks || '-',
+      'แนบใบขับขี่': r.licenseFile ? r.licenseFile.name : 'ไม่ได้แนบ',
+      'แนบสำเนากรมธรรม์ พ.ร.บ.': r.insuranceFile ? r.insuranceFile.name : 'ไม่ได้แนบ'
+    };
+  }
+
+  el('exportExcelBtn').addEventListener('click', ()=>{
+    const rec = buildRecord();
+    const ws = XLSX.utils.json_to_sheet([recordToRow(rec)]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'คำขอเบิกงบ');
+    XLSX.writeFile(wb, 'คำขอเบิกงบ_'+(rec.empName||'form')+'_'+rec.fillDate+'.xlsx');
+    toast('ส่งออกไฟล์ Excel เรียบร้อยแล้ว');
+  });
+
+  el('exportAllExcelBtn').addEventListener('click', async ()=>{
+    const arr = await loadRecords();
+    if(arr.length===0){ toast('ยังไม่มีข้อมูลให้ส่งออก'); return; }
+    const ws = XLSX.utils.json_to_sheet(arr.map(recordToRow));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'สรุปการเบิกงบทั้งหมด');
+    XLSX.writeFile(wb, 'สรุปการเบิกงบทั้งหมด_'+todayStr()+'.xlsx');
+    toast('ส่งออกรายงานทั้งหมดเรียบร้อยแล้ว');
+  });
+
+  // ---------- Formal PDF export (letterhead style) ----------
+  function buildPrintHtml(r){
+    const helperLine = (r.helperNames && r.helperNames.length)
+      ? ` พร้อมพนักงานร่วมเดินทางอีก ${r.helperNames.length} ท่าน ได้แก่ ${r.helperNames.map(h=>(h.prefix||'')+h.name+(h.position?' ('+h.position+')':'')).join(', ')}`
+      : '';
+    return `
+      <div style="display:flex;align-items:center;justify-content:center;gap:18px;border-bottom:3px double #0B3C6B;padding-bottom:16px;margin-bottom:22px;">
+        <div style="text-align:center;">
+          <div style="font-size:23px;font-weight:700;color:#0B3C6B;letter-spacing:1.5px;">NiM EXPRESS</div>
+          <div style="font-size:11.5px;color:#5D7285;margin-top:4px;">บริษัท นิ่มเอ็กซ์เพรส จำกัด 19/28-30 ซอย ศูนย์วิจัย บางกะปิ ห้วยขวาง กรุงเทพฯ 10310</div>
+          <div style="font-size:10.5px;color:#8CA3B8;">NiM Express Co.,Ltd. 19/28-30 Soi Soonvijai, Bangkapi, Huaykwang, Bangkok 10310</div>
+        </div>
+      </div>
+
+      <div style="text-align:right;font-size:13px;margin-bottom:16px;color:#16283B;">วันที่ ${isoToThaiDMY(r.fillDate)}</div>
+
+      <div style="font-size:14px;margin-bottom:6px;"><b>เรื่อง</b>&nbsp;&nbsp;ขออนุมัติเบิกงบประมาณก่อนเดินทางไปปฏิบัติงาน ${r.endPoint||'-'}</div>
+      <div style="font-size:14px;margin-bottom:16px;"><b>เรียน</b>&nbsp;&nbsp;ผู้อำนวยการฝ่ายปฏิบัติการ</div>
+
+      <div style="font-size:13.5px;line-height:2;text-align:justify;margin-bottom:18px;">
+        &nbsp;&nbsp;&nbsp;&nbsp;เนื่องด้วย ${((r.empPrefix||'')+(r.empName||''))||'-'} ตำแหน่ง ${r.position||'-'}${helperLine} มีความประสงค์ขออนุมัติเบิกงบประมาณก่อนเดินทางไปปฏิบัติงาน ณ ${r.endPoint||'-'}
+        ในวันที่ ${isoToThaiDMY(r.departDate)} ถึงวันที่ ${isoToThaiDMY(r.returnDate)} รวมเป็นระยะเวลา ${r.workDays}
+        เพื่อ${r.purpose||'-'} โดยเดินทางด้วย${r.vehicleType||'รถยนต์ส่วนบุคคล'}${r.vehicleBrand?' ยี่ห้อ '+r.vehicleBrand:''}${r.vehiclePlate?' ทะเบียน '+r.vehiclePlate:''}จาก ${r.startPoint||'-'} ระยะทางรวมไป-กลับ ${fmt(r.distanceKm)} กิโลเมตร (อ้างอิงตามระบบ GPS)
+        จึงขออนุมัติเบิกงบประมาณก่อนเดินทางตามรายละเอียดดังนี้
+      </div>
+
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px;">
+        ${row('ค่าเดินทาง ('+fmt(r.distanceKm)+' กม. × '+fmt(r.fuelRate)+' บาท/กม.)', fmt(r.travelCost)+' บาท')}
+        ${r.tripType === 'oneday' ? '' : (r.accomBreakdown||[]).map((b,i)=>row('ค่าที่พัก ห้องที่ '+(i+1)+' ('+b.levelLabel+' / '+b.areaLabel+', '+b.nights+' คืน × '+fmt(b.rate)+' บาท)', fmt(b.cost)+' บาท')).join('')}
+        ${r.tripType === 'oneday' ? '' : (r.perDiemBreakdown||[]).map((b,i)=>row('ค่าเบี้ยเลี้ยง คนที่ '+(i+1)+' ('+b.levelLabel+' / '+b.areaLabel+', '+b.days+' วัน × '+fmt(b.rate)+' บาท)', fmt(b.cost)+' บาท')).join('')}
+      </table>
+
+      <div style="padding:9px 16px;border-radius:10px;background:#EAF3FB;color:#0B3C6B;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-size:12px;font-weight:600;">ประมาณการค่าใช้จ่ายขออนุมัติเบิกงบเดินทาง</div>
+        <div style="font-size:14px;font-weight:700;">${fmt(r.totalCost)} บาท</div>
+      </div>
+
+      <div style="padding:20px 22px;border-radius:10px;background:linear-gradient(135deg,#2E9E6D,#4FBE8C);color:#fff;display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div style="font-size:14px;font-weight:600;">รวมอนุมัติค่าเดินทาง (เฉพาะค่าเดินทาง)</div>
+        <div style="font-size:26px;font-weight:700;">${fmt(r.approvedTravelCost!=null?r.approvedTravelCost:r.travelCost)} บาท</div>
+      </div>
+
+      ${attachmentsHtml(r)}
+
+      ${r.remarks ? `<div style="font-size:13px;margin-top:12px;"><b>หมายเหตุ</b>&nbsp;&nbsp;${r.remarks}</div>` : ''}
+
+      <div id="pdfSignatureBlock">
+        <div style="font-size:13px;margin-top:10px;">จึงเรียนมาเพื่อโปรดพิจารณาอนุมัติ</div>
+        <div style="font-size:13px;">ขอแสดงความนับถือ</div>
+
+        <table style="width:100%;margin-top:56px;font-size:12px;text-align:center;">
+          <tr>
+            <td style="width:50%;padding-bottom:56px;">
+              ลงชื่อ......................................................<br>
+              (${((r.empPrefix||'')+(r.empName||'')) || '......................................................'})<br>
+              ผู้ขออนุมัติ
+            </td>
+            <td style="width:50%;padding-bottom:56px;">
+              ลงชื่อ......................................................<br>
+              (......................................................)<br>
+              ผู้พิจารณา
+            </td>
+          </tr>
+          <tr>
+            <td>
+              ลงชื่อ......................................................<br>
+              (......................................................)<br>
+              ผู้พิจารณา
+            </td>
+            <td>
+              ลงชื่อ......................................................<br>
+              (......................................................)<br>
+              ผู้อนุมัติ
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <div style="text-align:center;font-size:10.5px;color:#8CA3B8;margin-top:30px;border-top:1px solid #EAF3FB;padding-top:10px;">
+        Call Center 090-554-1908 / Fax. 02-203-1178-9 / www.nimexpress.com
+      </div>
+    `;
+    function row(label,val){
+      return `<tr>
+        <td style="padding:7px 4px;color:#5D7285;width:65%;border-bottom:1px solid #EAF3FB;">${label}</td>
+        <td style="padding:7px 4px;font-weight:600;color:#16283B;text-align:right;border-bottom:1px solid #EAF3FB;">${val}</td>
+      </tr>`;
+    }
+    function attachmentsHtml(r){
+      const blocks = [
+        {file:r.licenseFile, label:'ใบขับขี่'},
+        {file:r.insuranceFile, label:'สำเนากรมธรรม์ พ.ร.บ. รถยนต์'}
+      ].filter(b=>b.file);
+      if(blocks.length===0) return '';
+      const cells = blocks.map(b=>{
+        const viewSrc = b.file.dataUrl || b.file.url || '';
+        const inner = (b.file.isImage && viewSrc)
+          ? `<img src="${viewSrc}" style="width:100%;max-height:220px;object-fit:contain;border:1px solid #D7E6F5;border-radius:8px;background:#F5F9FD;">`
+          : `<div style="border:1px dashed #D7E6F5;border-radius:8px;padding:18px 10px;text-align:center;font-size:11.5px;color:#5D7285;">📄 ${b.file.name||'ไฟล์แนบ'}</div>`;
+        return `<td style="width:50%;padding:6px;vertical-align:top;">
+          <div style="font-size:11.5px;font-weight:600;color:#0B3C6B;margin-bottom:6px;">${b.label}</div>
+          ${inner}
+        </td>`;
+      }).join('');
+      return `<table style="width:100%;border-collapse:collapse;margin-bottom:14px;"><tr>${cells}</tr></table>`;
+    }
+  }
+
+  // รอให้รูปทุกรูปใน printArea โหลดเสร็จ (หรือโหลดไม่สำเร็จ/หมดเวลา) ก่อนค่อยสั่ง html2canvas
+  // ถ่ายภาพหน้าจอ — จำเป็นเพราะการตั้ง innerHTML ที่มี <img src="data:..."> ไม่ได้แปลว่ารูปจะ
+  // ถูก decode/วาดเสร็จทันที ถ้า html2canvas รันไปก่อนรูปจะโหลดเสร็จ รูปนั้นจะหายไปจาก PDF เงียบ ๆ
+  // (พบบ่อยกับรูปขนาดใหญ่ หรือเครื่อง/เน็ตที่ช้ากว่า) — ไม่ throw ถ้ารูปโหลดพัง แค่รอจนครบ/หมดเวลาแล้วไปต่อ
+  function waitForImagesToLoad(container, timeoutMs=10000){
+    const imgs = Array.from(container.querySelectorAll('img'));
+    if(imgs.length===0) return Promise.resolve();
+    return Promise.all(imgs.map(img=>{
+      if(img.complete && img.naturalWidth>0) return Promise.resolve();
+      return new Promise(resolve=>{
+        const done = ()=>{ img.removeEventListener('load',done); img.removeEventListener('error',done); resolve(); };
+        img.addEventListener('load',done);
+        img.addEventListener('error',done);
+        setTimeout(done, timeoutMs);
+      });
+    }));
+  }
+
+  async function exportRecordAsPdf(rec){
+    const printArea = document.getElementById('printArea');
+    toast('กำลังสร้างไฟล์ PDF...');
+    try{
+      rec = await hydrateAttachmentsForPdf(rec);
+      printArea.innerHTML = buildPrintHtml(rec);
+      await waitForImagesToLoad(printArea);
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('p','pt','a4');
+      const margin = 30;
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pageWidth - margin*2;
+      const contentHeight = pageHeight - margin*2;
+
+      // Before rendering to canvas: figure out where the closing line + signature
+      // table (#pdfSignatureBlock) would land. If it would be sliced in half by a
+      // page break, push it down with a blank spacer so it starts cleanly on the
+      // next page instead of being cut mid-block.
+      const domWidth = printArea.offsetWidth;
+      const ptPerPx = imgWidth / domWidth;
+      const pageContentDomPx = contentHeight / ptPerPx;
+      const sigBlock = printArea.querySelector('#pdfSignatureBlock');
+      if(sigBlock){
+        const top = sigBlock.offsetTop;
+        const h = sigBlock.offsetHeight;
+        const posInPage = top % pageContentDomPx;
+        if(h <= pageContentDomPx && posInPage + h > pageContentDomPx){
+          const spacer = document.createElement('div');
+          spacer.style.height = (pageContentDomPx - posInPage) + 'px';
+          sigBlock.parentNode.insertBefore(spacer, sigBlock);
+        }
+      }
+
+      const canvas = await html2canvas(printArea, {scale:2, backgroundColor:'#ffffff', useCORS:true});
+      const imgHeight = canvas.height * (imgWidth/canvas.width);
+
+      if(imgHeight <= contentHeight){
+        // Fits on a single page — unchanged behaviour.
+        pdf.addImage(canvas.toDataURL('image/png'),'PNG',margin,margin,imgWidth,imgHeight);
+      } else {
+        // Content is taller than one A4 page. Crop the source canvas into separate
+        // page-sized slices (rather than re-drawing the whole image shifted on each
+        // page) so margin bands never repaint the same content twice.
+        const pxPerPt = canvas.width / imgWidth;
+        const pageContentCanvasPx = contentHeight * pxPerPt;
+        let renderedPx = 0;
+        let page = 0;
+        while(renderedPx < canvas.height){
+          const sliceHeightPx = Math.min(pageContentCanvasPx, canvas.height - renderedPx);
+          const sliceCanvas = document.createElement('canvas');
+          sliceCanvas.width = canvas.width;
+          sliceCanvas.height = sliceHeightPx;
+          const ctx = sliceCanvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0,0,sliceCanvas.width,sliceCanvas.height);
+          ctx.drawImage(canvas, 0, renderedPx, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
+          const sliceHeightPt = sliceHeightPx / pxPerPt;
+          if(page > 0) pdf.addPage();
+          pdf.addImage(sliceCanvas.toDataURL('image/png'),'PNG',margin,margin,imgWidth,sliceHeightPt);
+          renderedPx += sliceHeightPx;
+          page++;
+        }
+      }
+      pdf.save('คำขอเบิกงบ_'+(rec.empName||'form')+'_'+rec.fillDate+'.pdf');
+      toast('ส่งออกไฟล์ PDF เรียบร้อยแล้ว');
+    }catch(e){
+      console.error(e);
+      toast('เกิดข้อผิดพลาดในการสร้าง PDF');
+    }
+  }
+
+  el('exportPdfBtn').addEventListener('click', async ()=>{
+    const rec = buildRecord();
+    if(!validateForm(rec)) return;
+    await exportRecordAsPdf(rec);
+  });
+
+  // ---------- Detail view modal (from the overview list) ----------
+  let detailModalRecord = null;
+  function openDetailModal(rec){
+    detailModalRecord = rec;
+    el('detailBoxBody').innerHTML = buildPrintHtml(rec);
+    el('detailOverlay').classList.remove('hidden');
+  }
+  function closeDetailModal(){
+    el('detailOverlay').classList.add('hidden');
+    detailModalRecord = null;
+  }
+  el('detailCloseBtn').addEventListener('click', closeDetailModal);
+  el('detailOverlay').addEventListener('click', (e)=>{
+    if(e.target.id==='detailOverlay') closeDetailModal();
+  });
+  el('detailPdfBtn').addEventListener('click', async ()=>{
+    if(!detailModalRecord) return;
+    await exportRecordAsPdf(detailModalRecord);
+  });
+
+  // ---------- Overview ----------
+  let currentPeriod = 'month';
+  // (Trend and destination charts no longer use Chart.js — rendered as plain HTML/CSS below.)
+
+  document.querySelectorAll('#periodFilter .chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      document.querySelectorAll('#periodFilter .chip').forEach(c=>c.classList.remove('active'));
+      chip.classList.add('active');
+      currentPeriod = chip.dataset.period;
+      refreshOverview();
+    });
+  });
+  if(el('showCancelledToggle')){
+    el('showCancelledToggle').addEventListener('change', refreshOverview);
+  }
+
+  // ---------- Cancel a wrongly-entered record ----------
+  // Cancelling never deletes the record — it flips status to 'cancelled' and re-saves it
+  // under the SAME id. Every KPI/chart/sum in refreshOverview() reads from activeAll, which
+  // already excludes anything with status==='cancelled', so a cancelled request stops being
+  // counted anywhere the moment this finishes. It stays visible in the table (tick "แสดง
+  // รายการที่ยกเลิกด้วย") purely as an audit trail of what was cancelled and why.
+  //
+  // Re-saving with the same id and pushing it to the Google Sheet (sendToGoogleSheet) works
+  // the same way a normal correction would: loadRecords() merges Sheet + local records into a
+  // map keyed by id, so the newest write for a given id — the cancellation — is what every
+  // screen ends up reading. Older snapshots of that id are superseded automatically.
+  async function cancelRecordFlow(rec){
+    if(!isActiveRecord(rec)){ toast('รายการนี้ถูกยกเลิกไปแล้ว'); return false; }
+    const reason = await appPrompt('ระบุเหตุผลที่ยกเลิกรายการนี้ (ไม่บังคับ) เช่น "กรอกข้อมูลผิด ขอยกเลิกเพื่อกรอกใหม่"', '', 'ยกเลิกรายการ');
+    if(reason === null) return false; // user pressed Cancel on the prompt itself — abort, don't cancel the record
+    if(!(await appConfirm('', 'ยืนยันการยกเลิก'))) return false;
+    try{
+      const full = await loadRecordWithFiles(rec);
+      const updated = {...full, status:'cancelled', cancelledAt: new Date().toISOString(), cancelReason: (reason||'').trim()};
+      const result = await saveRecord(updated);
+      if(result.ok){
+        sendToGoogleSheet(updated); // fire-and-forget — pushes the cancellation as the latest write for this id
+        toast('ยกเลิกรายการเรียบร้อยแล้ว — ไม่ถูกนับรวมในยอดขออนุมัติ/กราฟอีกต่อไป');
+        await refreshOverview();
+        return true;
+      } else {
+        toast('ยกเลิกรายการไม่สำเร็จ: '+(result.reason||'ไม่ทราบสาเหตุ'));
+        return false;
+      }
+    }catch(e){
+      console.error('cancelRecordFlow failed', e);
+      toast('เกิดข้อผิดพลาดในการยกเลิกรายการ');
+      return false;
+    }
+  }
+
+  // ---------- Approve / reject a request ----------
+  // Only someone unlocked as an approver (APPROVER_CODES) can call this — the buttons that
+  // trigger it are only rendered for approvers in the first place (see refreshOverview), but
+  // this function double-checks so a stale button reference can never bypass the check.
+  // Deciding never touches status:'cancelled' — a cancelled request is out of the workflow
+  // entirely and can't be approved/rejected.
+  async function decideRecordFlow(rec, decision){
+    if(!hasApproverAccess()){ toast('คุณไม่มีสิทธิ์อนุมัติ/ไม่อนุมัติคำขอ'); return false; }
+    if(rec.status === 'cancelled'){ toast('รายการนี้ถูกยกเลิกไปแล้ว ไม่สามารถอนุมัติ/ไม่อนุมัติได้'); return false; }
+    const label = decision === 'approved' ? 'อนุมัติ' : 'ไม่อนุมัติ';
+    let note = '';
+    if(decision === 'rejected'){
+      note = await appPrompt('ระบุเหตุผลที่ไม่อนุมัติ (ไม่บังคับ)', '', 'ไม่อนุมัติคำขอ');
+      if(note === null) return false; // aborted the prompt
+    }
+    if(!(await appConfirm('', `ยืนยัน${label}คำขอนี้?`))) return false;
+    try{
+      const full = await loadRecordWithFiles(rec);
+      const updated = {...full, status: decision, decidedAt: new Date().toISOString(), decisionNote: (note||'').trim()};
+      const result = await saveRecord(updated);
+      if(result.ok){
+        sendToGoogleSheet(updated);
+        toast(`ทำรายการ${label}เรียบร้อยแล้ว`);
+        await refreshOverview();
+        return true;
+      } else {
+        toast(`ทำรายการไม่สำเร็จ: `+(result.reason||'ไม่ทราบสาเหตุ'));
+        return false;
+      }
+    }catch(e){
+      console.error('decideRecordFlow failed', e);
+      toast('เกิดข้อผิดพลาดในการทำรายการ');
+      return false;
+    }
+  }
+
+  function inPeriod(dateStr, period){
+    if(!dateStr) return false;
+    const d = new Date(dateStr);
+    const now = new Date();
+    if(period==='all') return true;
+    if(period==='day'){
+      return d.toDateString()===now.toDateString();
+    }
+    if(period==='week'){
+      const start = new Date(now); start.setDate(now.getDate()-now.getDay());
+      start.setHours(0,0,0,0);
+      const end = new Date(start); end.setDate(start.getDate()+7);
+      return d>=start && d<end;
+    }
+    if(period==='month'){
+      return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth();
+    }
+    if(period==='year'){
+      return d.getFullYear()===now.getFullYear();
+    }
+    return true;
+  }
+
+  function inPreviousPeriod(dateStr, period){
+    if(!dateStr) return false;
+    const d = new Date(dateStr);
+    const now = new Date();
+    if(period==='day'){
+      const y = new Date(now); y.setDate(now.getDate()-1);
+      return d.toDateString()===y.toDateString();
+    }
+    if(period==='week'){
+      const startCur = new Date(now); startCur.setDate(now.getDate()-now.getDay()); startCur.setHours(0,0,0,0);
+      const startPrev = new Date(startCur); startPrev.setDate(startCur.getDate()-7);
+      const endPrev = new Date(startCur);
+      return d>=startPrev && d<endPrev;
+    }
+    if(period==='month'){
+      let m = now.getMonth()-1, y = now.getFullYear();
+      if(m<0){ m=11; y-=1; }
+      return d.getFullYear()===y && d.getMonth()===m;
+    }
+    if(period==='year'){
+      return d.getFullYear()===(now.getFullYear()-1);
+    }
+    return false; // 'all' has no previous period to compare against
+  }
+
+  function periodCompareLabel(period){
+    return { day:'จากเมื่อวาน', week:'จากสัปดาห์ที่แล้ว', month:'จากเดือนที่แล้ว', year:'จากปีที่แล้ว' }[period] || '';
+  }
+
+  function renderCompare(elId, curr, prev, period, opts){
+    const target = document.getElementById(elId);
+    if(!target) return;
+    if(period==='all'){ target.innerHTML=''; return; }
+    const label = periodCompareLabel(period);
+    if(!prev){
+      if(curr>0){
+        target.innerHTML = `<div class="kpi-compare neutral"><span>🆕</span><span class="compare-label">ไม่มีข้อมูล${label.replace('จาก','')}</span></div>`;
+      } else {
+        target.innerHTML = '';
+      }
+      return;
+    }
+    const diffPct = ((curr-prev)/prev)*100;
+    const rounded = Math.round(diffPct*10)/10;
+    const goodDirection = (opts && opts.goodDirection) || 'neutral';
+    let dirClass = 'neutral', arrow = '▶';
+    if(rounded>0.05){ arrow='▲'; dirClass = goodDirection==='down' ? 'up' : (goodDirection==='up' ? 'down' : 'neutral'); }
+    else if(rounded<-0.05){ arrow='▼'; dirClass = goodDirection==='down' ? 'down' : (goodDirection==='up' ? 'up' : 'neutral'); }
+    target.innerHTML = `<div class="kpi-compare ${dirClass}"><span>${arrow} ${Math.abs(rounded)}%</span><span class="compare-label">${label}</span></div>`;
+  }
+
+  function bucketKey(dateStr, period){
+    const d = new Date(dateStr);
+    if(period==='day' || period==='week' || period==='month'){
+      return d.toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit'});
+    }
+    return d.toLocaleDateString('th-TH',{month:'2-digit',year:'2-digit'});
+  }
+
+  // A record counts toward every sum/KPI/chart unless it has been explicitly cancelled.
+  // Records saved before this feature existed have no `status` field at all, so treat
+  // anything other than the literal 'cancelled' value as active — this keeps old data
+  // working without a migration step.
+  function isActiveRecord(r){ return r && r.status !== 'cancelled'; }
+
+  async function refreshOverview(){
+    const all = await loadRecords();
+    const activeAll = all.filter(isActiveRecord);
+    const filtered = activeAll.filter(r=>inPeriod(r.departDate||r.fillDate, currentPeriod));
+    // "จำนวนคำขอทั้งหมด" counts every request regardless of status (pending/approved/
+    // rejected/cancelled) — separate from the money KPIs below, which exclude cancelled
+    // requests from analysis per policy.
+    const allStatusFiltered = all.filter(r=>inPeriod(r.departDate||r.fillDate, currentPeriod));
+    const count = allStatusFiltered.length;
+    const sum = filtered.reduce((a,r)=>a+(r.totalCost||0),0);
+    const avg = filtered.length? sum/filtered.length : 0;
+    const dist = filtered.reduce((a,r)=>a+(r.distanceKm||0),0);
+    const sumTravel = filtered.reduce((a,r)=>a+(r.travelCost||0),0);
+    const sumAccom = filtered.reduce((a,r)=>a+(r.accomCost||0),0);
+    const sumPerDiem = filtered.reduce((a,r)=>a+(r.perDiemCost||0),0);
+    el('kpiCount').textContent = fmtInt(count);
+    el('kpiSum').textContent = fmt(sum);
+    el('kpiAvg').textContent = fmt(avg);
+    el('kpiDist').textContent = fmt(dist);
+
+    // Pending / approved / cancelled counts, all scoped to the same period as the KPIs above.
+    const pendingCount = filtered.filter(r=> (r.status||'pending')==='pending').length;
+    const approvedCount = filtered.filter(r=> r.status==='approved').length;
+    const rejectedCount = filtered.filter(r=> r.status==='rejected').length;
+    const cancelledCount = all.filter(r=> r.status==='cancelled' && inPeriod(r.departDate||r.fillDate, currentPeriod)).length;
+    if(el('kpiPending')) el('kpiPending').textContent = fmtInt(pendingCount);
+    if(el('kpiApproved')) el('kpiApproved').textContent = fmtInt(approvedCount);
+    if(el('kpiRejected')) el('kpiRejected').textContent = fmtInt(rejectedCount);
+    if(el('kpiCancelled')) el('kpiCancelled').textContent = fmtInt(cancelledCount);
+
+    // Compare against the equivalent previous period (e.g. this month vs last month)
+    const prevFiltered = activeAll.filter(r=>inPreviousPeriod(r.departDate||r.fillDate, currentPeriod));
+    const prevCount = all.filter(r=>inPreviousPeriod(r.departDate||r.fillDate, currentPeriod)).length;
+    const prevSum = prevFiltered.reduce((a,r)=>a+(r.totalCost||0),0);
+    const prevAvg = prevFiltered.length? prevSum/prevFiltered.length : 0;
+    const prevDist = prevFiltered.reduce((a,r)=>a+(r.distanceKm||0),0);
+    renderCompare('kpiCountCompare', count, prevCount, currentPeriod, {goodDirection:'neutral'});
+    renderCompare('kpiSumCompare', sum, prevSum, currentPeriod, {goodDirection:'down'});
+    renderCompare('kpiAvgCompare', avg, prevAvg, currentPeriod, {goodDirection:'down'});
+    renderCompare('kpiDistCompare', dist, prevDist, currentPeriod, {goodDirection:'neutral'});
+
+    // Render the table BEFORE the charts. Chart.js is loaded from a CDN — if that request
+    // is blocked (offline use, corporate network, opening the file straight from disk with
+    // no internet), chart creation below can throw. Rendering the table first means the
+    // list of requests still shows up even if the charts fail.
+    const tbody = document.getElementById('recentTableBody');
+    const emptyNote = document.getElementById('emptyNote');
+    // The table itself is allowed to show cancelled rows (for audit / traceability) even
+    // though every KPI/chart above is computed from activeAll only. Whether they're shown
+    // is controlled by the "แสดงรายการที่ยกเลิกด้วย" checkbox — hidden by default so the
+    // day-to-day list stays clean.
+    const periodSource = all.filter(r=>inPeriod(r.departDate||r.fillDate, currentPeriod));
+    let tableSource;
+    if(requestListFilter === 'pending'){
+      tableSource = periodSource.filter(r=> isActiveRecord(r) && (r.status||'pending')==='pending');
+    } else if(requestListFilter === 'approved'){
+      tableSource = periodSource.filter(r=> isActiveRecord(r) && r.status==='approved');
+    } else if(requestListFilter === 'rejected'){
+      tableSource = periodSource.filter(r=> isActiveRecord(r) && r.status==='rejected');
+    } else if(requestListFilter === 'cancelled'){
+      tableSource = periodSource.filter(r=> !isActiveRecord(r));
+    } else {
+      // Default view (opened from "จำนวนคำขอทั้งหมด") — every status, no filtering.
+      tableSource = periodSource;
+    }
+    // เรียงตาม "วันที่กรอกข้อมูล" (fillDate) จากน้อยไปมาก ตามที่ผู้ดูแลต้องการ
+    const sorted = tableSource.slice().sort((a,b)=> new Date(a.fillDate||0) - new Date(b.fillDate||0));
+    const approver = hasApproverAccess();
+    if(sorted.length===0){
+      tbody.innerHTML='';
+      emptyNote.style.display='block';
+    } else {
+      emptyNote.style.display='none';
+      tbody.innerHTML = sorted.map(r=>{
+        const cancelled = !isActiveRecord(r);
+        const actionCell = `<button class="detail-btn" data-id="${r.id}">📄 รายละเอียด</button>`;
+        const st = r.status || 'pending';
+        const statusCell = st==='cancelled' ? '<span class="badge-cancelled">ยกเลิกแล้ว</span>'
+          : st==='approved' ? '<span class="badge-approved">อนุมัติแล้ว</span>'
+          : st==='rejected' ? '<span class="badge-rejected">ไม่อนุมัติ</span>'
+          : '<span class="badge-pending">รออนุมัติ</span>';
+        return `
+        <tr class="${cancelled ? 'row-cancelled' : ''}">
+          <td>${isoToThaiDMY(r.fillDate)||'-'}</td>
+          <td>${isoToThaiDMY(r.departDate)||'-'}</td>
+          <td>${((r.empPrefix||'')+(r.empName||''))||'-'}</td>
+          <td><span class="badge">${r.empCode||'-'}</span></td>
+          <td>${r.startPoint||'-'}</td>
+          <td>${r.endPoint||'-'}</td>
+          <td>${fmt(r.distanceKm)}</td>
+          <td>${fmt(r.totalCost)}</td>
+          <td>${statusCell}</td>
+          <td>${actionCell}</td>
+        </tr>
+      `;}).join('');
+      tbody.querySelectorAll('.detail-btn').forEach(btn=>{
+        btn.addEventListener('click', async ()=>{
+          const rec = sorted.find(x=>x.id===btn.dataset.id);
+          if(!rec) return;
+          btn.disabled = true;
+          try{
+            const full = await loadRecordWithFiles(rec);
+            populateFormFromRecord(full, true);
+          }catch(e){
+            console.error('load record detail failed', e);
+            toast('เกิดข้อผิดพลาดในการโหลดรายละเอียด');
+          }
+          btn.disabled = false;
+        });
+      });
+      tbody.querySelectorAll('.refill-btn').forEach(btn=>{
+        btn.addEventListener('click', async ()=>{
+          const rec = sorted.find(x=>x.id===btn.dataset.id);
+          if(!rec) return;
+          btn.disabled = true;
+          try{
+            const full = await loadRecordWithFiles(rec);
+            populateFormFromRecord(full, false);
+            toast('นำข้อมูลจากรายการที่ยกเลิกมาเติมในฟอร์มแล้ว — แก้ไขจุดที่ผิดแล้วกดบันทึกเพื่อส่งเป็นคำขอใหม่');
+          }catch(e){
+            console.error('refill from cancelled record failed', e);
+            toast('เกิดข้อผิดพลาดในการนำข้อมูลมากรอกใหม่');
+          }
+          btn.disabled = false;
+        });
+      });
+    }
+
+    // All four overview charts (trend, destination frequency, cost breakdown, top-5 lists)
+    // are built with plain HTML/CSS below — no Chart.js / CDN dependency — so they always
+    // render correctly even when Chart.js fails to load (e.g. opening this file offline,
+    // or on a network that blocks the cdnjs.cloudflare.com script).
+    const buckets = {};
+    filtered.slice().sort((a,b)=> new Date(a.departDate||a.fillDate) - new Date(b.departDate||b.fillDate))
+      .forEach(r=>{
+        const k = bucketKey(r.departDate||r.fillDate, currentPeriod);
+        buckets[k] = (buckets[k]||0) + (r.totalCost||0);
+      });
+    renderTrendChart(Object.entries(buckets));
+
+    const destCounts = {};
+    filtered.forEach(r=>{
+      const k = r.endPoint || 'ไม่ระบุ';
+      destCounts[k] = (destCounts[k]||0)+1;
+    });
+    const destEntries = Object.entries(destCounts).sort((a,b)=>b[1]-a[1]).slice(0,8);
+    renderFreqBarList('destFreqList', destEntries);
+
+    renderCostDonut(sumTravel, sumAccom, sumPerDiem);
+    renderTopBarList('topRequestersList', (()=>{
+      const reqSums = {};
+      filtered.forEach(r=>{
+        const k = ((r.empPrefix||'')+(r.empName||'')).trim() || r.empCode || 'ไม่ระบุ';
+        reqSums[k] = (reqSums[k]||0) + (r.totalCost||0);
+      });
+      return Object.entries(reqSums).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    })());
+    renderTopBarList('topDestValueList', (()=>{
+      const destSums = {};
+      filtered.forEach(r=>{
+        const k = r.endPoint || 'ไม่ระบุ';
+        destSums[k] = (destSums[k]||0) + (r.totalCost||0);
+      });
+      return Object.entries(destSums).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    })());
+  }
+
+  function renderCostDonut(sumTravel, sumAccom, sumPerDiem){
+    const ring = document.getElementById('costDonutRing');
+    const center = document.getElementById('costDonutCenter');
+    const legend = document.getElementById('costDonutLegend');
+    const total = sumTravel + sumAccom + sumPerDiem;
+    const parts = [
+      {label:'ค่าเดินทาง', value:sumTravel, color:'#1B6FC4'},
+      {label:'ค่าที่พัก', value:sumAccom, color:'#0B3C6B'},
+      {label:'ค่าเบี้ยเลี้ยง', value:sumPerDiem, color:'#4FA3E3'}
+    ];
+    center.innerHTML = total ? `${fmt(total)}<br>บาท` : '0<br>บาท';
+    if(total<=0){
+      ring.style.background = '#EAF3FB';
+      legend.innerHTML = '<div class="donut-empty">ยังไม่มีข้อมูลค่าใช้จ่ายในช่วงนี้</div>';
+      return;
+    }
+    let acc = 0;
+    const stops = parts.map(p=>{
+      const startPct = (acc/total)*100;
+      acc += p.value;
+      const endPct = (acc/total)*100;
+      return `${p.color} ${startPct}% ${endPct}%`;
+    }).join(', ');
+    ring.style.background = `conic-gradient(${stops})`;
+    legend.innerHTML = parts.map(p=>{
+      const pct = total ? Math.round(p.value/total*1000)/10 : 0;
+      return `<div class="donut-legend-row">
+        <span class="donut-dot" style="background:${p.color};"></span>
+        <span class="donut-legend-label">${p.label}</span>
+        <span class="donut-legend-val">${fmt(p.value)} บาท</span>
+        <span class="donut-legend-pct">${pct}%</span>
+      </div>`;
+    }).join('');
+  }
+
+  function renderTopBarList(elId, entries){
+    const container = document.getElementById(elId);
+    if(!container) return;
+    if(!entries.length || entries.every(e=>e[1]<=0)){
+      container.innerHTML = '<div class="donut-empty">ยังไม่มีข้อมูลในช่วงนี้</div>';
+      return;
+    }
+    const max = Math.max(...entries.map(e=>e[1]), 1);
+    container.innerHTML = entries.map((e,i)=>{
+      const pct = Math.max(4, Math.round(e[1]/max*100));
+      return `<div class="bar-list-row">
+        <div class="bar-list-top">
+          <span class="bar-list-name"><span class="bar-list-rank">${i+1}</span>${e[0]}</span>
+          <span class="bar-list-amount">${fmt(e[1])} บาท</span>
+        </div>
+        <div class="bar-list-track"><div class="bar-list-fill" style="width:${pct}%;"></div></div>
+      </div>`;
+    }).join('');
+  }
+
+  // Same ranked-bar layout as renderTopBarList, but for plain counts (e.g. "3 ครั้ง")
+  // instead of money amounts — used by the "destination frequency" card.
+  function renderFreqBarList(elId, entries){
+    const container = document.getElementById(elId);
+    if(!container) return;
+    if(!entries.length || entries.every(e=>e[1]<=0)){
+      container.innerHTML = '<div class="donut-empty">ยังไม่มีข้อมูลในช่วงนี้</div>';
+      return;
+    }
+    const max = Math.max(...entries.map(e=>e[1]), 1);
+    container.innerHTML = entries.map((e,i)=>{
+      const pct = Math.max(4, Math.round(e[1]/max*100));
+      return `<div class="bar-list-row">
+        <div class="bar-list-top">
+          <span class="bar-list-name"><span class="bar-list-rank">${i+1}</span>${e[0]}</span>
+          <span class="bar-list-amount">${fmtInt(e[1])} ครั้ง</span>
+        </div>
+        <div class="bar-list-track"><div class="bar-list-fill" style="width:${pct}%;"></div></div>
+      </div>`;
+    }).join('');
+  }
+
+  // "แนวโน้มยอดเบิกงบ" — sums totalCost of every filtered request into buckets by the
+  // currently-selected period (day/week/month -> per date, year/all -> per month), then
+  // draws one vertical bar per bucket. entries is Object.entries(buckets): [label, sumBaht][]
+  function renderTrendChart(entries){
+    const wrap = document.getElementById('trendChartWrap');
+    if(!wrap) return;
+    if(!entries.length || entries.every(e=>e[1]<=0)){
+      wrap.innerHTML = '<div class="donut-empty" style="width:100%;">ยังไม่มีข้อมูลในช่วงนี้</div>';
+      return;
+    }
+    const max = Math.max(...entries.map(e=>e[1]), 1);
+    wrap.innerHTML = entries.map(e=>{
+      const heightPct = Math.max(3, Math.round(e[1]/max*100));
+      return `<div class="vbar-col">
+        <div class="vbar-value">${compactNum(e[1])}</div>
+        <div class="vbar-fill" style="height:${heightPct}%;"></div>
+        <div class="vbar-label">${e[0]}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // Compact number for the small label above each trend bar, e.g. 13040 -> "13.0k"
+  function compactNum(n){
+    if(n>=1000000) return (Math.round(n/100000)/10)+'M';
+    if(n>=1000) return (Math.round(n/100)/10)+'k';
+    return fmtInt(n);
+  }
+
+  renderHelperNames();
+  updateSaveButtonState();
+  refreshOverview();
+})();
+</script>
+</body>
+</html>
