@@ -796,8 +796,8 @@
           <div style="margin-bottom:16px;" id="accomSection">
             <div class="section-head" style="margin-bottom:10px;"><div class="section-num">12</div><div class="section-title" style="font-size:14px;">ค่าที่พัก (ตามสวัสดิการ)</div></div>
             <div class="field-grid">
-              <div class="field"><label>จำนวนคืนที่พัก</label><input type="number" id="accomNights" min="0" value="0"></div>
-              <div class="field"><label>จำนวนห้องพัก</label><input type="number" id="accomRoomCount" min="1" value="1"></div>
+              <div class="field"><label>จำนวนคืนที่พัก (คำนวณอัตโนมัติ)</label><input type="text" id="accomNights" readonly value="0"></div>
+              <div class="field"><label>จำนวนห้องพัก (คำนวณอัตโนมัติ)</label><input type="text" id="accomRoomCount" readonly value="1"></div>
             </div>
             <div class="helper-list" id="accomList" style="margin-top:12px;"></div>
             <div class="field full" style="margin-top:12px;"><label>รวมค่าที่พัก (คำนวณอัตโนมัติ)</label><input type="text" id="accomCost" readonly value="0.00 บาท"></div>
@@ -807,8 +807,8 @@
           <div id="perDiemSection">
             <div class="section-head" style="margin-bottom:10px;"><div class="section-num">13</div><div class="section-title" style="font-size:14px;">ค่าเบี้ยเลี้ยง</div></div>
             <div class="field">
-              <label>จำนวนวันเบิกเบี้ยเลี้ยง (ต่อคน)</label>
-              <input type="number" id="perDiemDays" min="0" value="0">
+              <label>จำนวนวันเบิกเบี้ยเลี้ยง (ต่อคน) (คำนวณอัตโนมัติ)</label>
+              <input type="text" id="perDiemDays" readonly value="0">
             </div>
             <span class="hint">หากจำนวนพนักงานเดินทางรวม (ข้อ 2) มากกว่า 1 คน ระบบจะแสดงช่องให้เลือกระดับตำแหน่งและพื้นที่ปฏิบัติงานของแต่ละคนแยกกันด้านล่างโดยอัตโนมัติ</span>
             <div class="helper-list" id="perDiemList" style="margin-top:12px;"></div>
@@ -1671,15 +1671,12 @@
       });
     });
   }
-  el('accomRoomCount').addEventListener('input', ()=>{
-    renderAccomList();
-    recalcCosts();
-  });
-
-  // ---------- Same-sex room sharing suggestion (section 10) ----------
-  // If every traveler's selected prefix (คำนำหน้าชื่อ) maps to the same gender,
-  // the room count is suggested at 1 room per 2 travelers. If prefixes indicate
-  // mixed genders (or any prefix is missing), each traveler is suggested a room of their own.
+  // ---------- Automatic room count by gender (section 10) ----------
+  // จำนวนห้องพัก is fully system-calculated and not user-editable (field is readonly).
+  // Travelers sharing the same known gender (from คำนำหน้าชื่อ) are grouped 2 per room.
+  // Travelers of a different gender always get a separate room. A traveler with an
+  // unknown/missing prefix is conservatively given their own room, since we can't
+  // safely assume who they should share with.
   const PREFIX_GENDER = { 'นาย':'male', 'นาง':'female', 'นางสาว':'female' };
   function getTravelerGenders(){
     const total = Math.max(1, Math.floor(Number(el('helperCount').value)||1));
@@ -1919,7 +1916,7 @@
     recalcCosts();
   }
 
-  ['distanceKm','accomNights','perDiemDays','helperCount'].forEach(id=> el(id).addEventListener('input', recalcCosts));
+  ['distanceKm','helperCount'].forEach(id=> el(id).addEventListener('input', recalcCosts));
 
   function recalcCosts(){
     const distanceOneWay = Number(el('distanceKm').value)||0;
