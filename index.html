@@ -689,7 +689,7 @@
                 <input type="date" id="returnDate" class="date-hidden">
               </div>
             </div>
-            <div class="field full"><label>จำนวนวันที่ทำงาน (คำนวณอัตโนมัติ)</label><input type="text" id="workDays" readonly value="0 วัน"></div>
+            <div class="field full" style="display:none;"><label>จำนวนวันที่ทำงาน (คำนวณอัตโนมัติ)</label><input type="text" id="workDays" readonly value="0 วัน"></div>
           </div>
         </div>
 
@@ -795,13 +795,31 @@
 
           <div style="margin-bottom:16px;" id="accomSection">
             <div class="section-head" style="margin-bottom:10px;"><div class="section-num">12</div><div class="section-title" style="font-size:14px;">ค่าที่พัก (ตามสวัสดิการ)</div></div>
-            <div class="field-grid">
-              <div class="field"><label>จำนวนคืนที่พัก (คำนวณอัตโนมัติ)</label><input type="text" id="accomNights" readonly value="0"></div>
-              <div class="field"><label>จำนวนห้องพัก (คำนวณอัตโนมัติ)</label><input type="text" id="accomRoomCount" readonly value="1"></div>
+
+            <div class="field" style="margin-bottom:14px;">
+              <label>ประเภทที่พัก</label>
+              <div class="trip-type-row">
+                <button type="button" class="trip-type-btn active" data-accom-type="rent"><span class="trip-type-radio"></span>เช่าห้องพัก</button>
+                <button type="button" class="trip-type-btn" data-accom-type="dc"><span class="trip-type-radio"></span>พักที่ DC</button>
+                <button type="button" class="trip-type-btn" data-accom-type="other"><span class="trip-type-radio"></span>อื่นๆ</button>
+              </div>
+              <span class="hint">เลือก "เช่าห้องพัก" หากต้องเบิกค่าที่พักตามสวัสดิการ · เลือก "พักที่ DC" หรือ "อื่นๆ" หากมีที่พักให้แล้วและไม่ต้องเบิกค่าที่พัก</span>
             </div>
-            <div class="helper-list" id="accomList" style="margin-top:12px;"></div>
+
+            <div id="accomOtherDetailWrap" class="field full" style="display:none;margin-bottom:14px;">
+              <label>รายละเอียดที่พัก (อื่นๆ)</label>
+              <input type="text" id="accomOtherDetail" placeholder="ระบุรายละเอียดที่พัก เช่น พักบ้านญาติ, พักกับเพื่อนร่วมงาน ฯลฯ">
+            </div>
+
+            <div id="accomCostDetails">
+              <div class="field-grid">
+                <div class="field"><label>จำนวนคืนที่พัก (คำนวณอัตโนมัติ)</label><input type="text" id="accomNights" readonly value="0"></div>
+                <div class="field"><label>จำนวนห้องพัก (คำนวณอัตโนมัติ)</label><input type="text" id="accomRoomCount" readonly value="1"></div>
+              </div>
+              <div class="helper-list" id="accomList" style="margin-top:12px;"></div>
+              <span class="hint">รวมค่าที่พัก = จำนวนคืน × Σ(อัตราค่าที่พักของแต่ละห้อง) · อัตรา: ผู้จัดการ LV.10 กทม./ปริมณฑล = 1,000 บาท · LV.10 พื้นที่อื่น และ LV.9 ลงมา (ทุกพื้นที่) = 800 บาท</span>
+            </div>
             <div class="field full" style="margin-top:12px;"><label>รวมค่าที่พัก (คำนวณอัตโนมัติ)</label><input type="text" id="accomCost" readonly value="0.00 บาท"></div>
-            <span class="hint">รวมค่าที่พัก = จำนวนคืน × Σ(อัตราค่าที่พักของแต่ละห้อง) · อัตรา: ผู้จัดการ LV.10 กทม./ปริมณฑล = 1,000 บาท · LV.10 พื้นที่อื่น และ LV.9 ลงมา (ทุกพื้นที่) = 800 บาท</span>
           </div>
 
           <div id="perDiemSection">
@@ -1707,6 +1725,27 @@
   }
   el('empPrefix').addEventListener('change', applyRoomGenderSuggestion);
 
+  // ---------- "ประเภทที่พัก" selector (section 12) ----------
+  // 'rent' (เช่าห้องพัก): normal case — accommodation cost is calculated from the room/rate
+  // details below. 'dc' (พักที่ DC) and 'other' (อื่นๆ): the unit/office has already
+  // arranged (or the traveler has already sourced) accommodation, so no accommodation cost
+  // is claimed — the room-count / per-room rate details are hidden and accomCost is forced
+  // to 0. 'other' additionally shows a free-text field to record what the arrangement was.
+  let accomType = 'rent'; // 'rent' | 'dc' | 'other'
+  const ACCOM_TYPE_LABELS = { rent:'เช่าห้องพัก', dc:'พักที่ DC', other:'อื่นๆ' };
+  function applyAccomType(){
+    document.querySelectorAll('#accomSection .trip-type-btn').forEach(b=> b.classList.toggle('active', b.dataset.accomType===accomType));
+    el('accomCostDetails').style.display = accomType==='rent' ? '' : 'none';
+    el('accomOtherDetailWrap').style.display = accomType==='other' ? '' : 'none';
+    recalcCosts();
+  }
+  document.querySelectorAll('#accomSection .trip-type-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      accomType = btn.dataset.accomType;
+      applyAccomType();
+    });
+  });
+
   let perDiemValues = [{level:'lv10', area:'bkk'}];
   function renderPerDiemList(){
     const container = el('perDiemList');
@@ -1912,7 +1951,8 @@
     el('workDays').value = wd + ' วัน';
     const nights = Math.max(wd-1,0);
     el('accomNights').value = nights;
-    el('perDiemDays').value = wd;
+    // เบี้ยเลี้ยงคำนวณตามจำนวนคืนที่พักค้างคืนจริง (ไม่ใช่จำนวนวันทำงานทั้งหมด)
+    el('perDiemDays').value = nights;
     recalcCosts();
   }
 
@@ -1943,7 +1983,6 @@
     });
     const accomCost = accomBreakdown.reduce((sum,b)=>sum+b.cost,0);
     const accomRooms = accomBreakdown.length;
-    el('accomCost').value = fmt(accomCost)+' บาท';
 
     const pdDays = Number(el('perDiemDays').value)||0;
     const perDiemBreakdown = perDiemValues.map(v=>{
@@ -1960,21 +1999,25 @@
 
     // "ไป-กลับ (ไม่ค้างคืน)" trips never carry accommodation/per-diem costs, regardless of
     // whatever values happen to still be sitting in those (hidden) fields — see applyTripType().
-    const accomCostFinal = tripType === 'oneday' ? 0 : accomCost;
+    // accomType 'dc' or 'other' also zeroes out accommodation cost, since accommodation has
+    // already been arranged elsewhere and no accommodation is being claimed.
+    const accomProvided = accomType !== 'rent';
+    const accomCostFinal = (tripType === 'oneday' || accomProvided) ? 0 : accomCost;
     const perDiemCostFinal = tripType === 'oneday' ? 0 : perDiemCost;
-    el('accomCost').value = fmt(accomCostFinal)+' บาท';
+    const accomNote = accomType==='dc' ? '0.00 บาท (พักที่ DC)' : accomType==='other' ? '0.00 บาท (อื่นๆ)' : null;
+    el('accomCost').value = accomNote || fmt(accomCostFinal)+' บาท';
     el('perDiemCost').value = fmt(perDiemCostFinal)+' บาท';
 
     const total = travelCost+accomCostFinal+perDiemCostFinal;
 
     el('sumTravel').textContent = fmt(travelCost)+' บาท';
-    el('sumAccom').textContent = fmt(accomCostFinal)+' บาท';
+    el('sumAccom').textContent = accomNote || fmt(accomCostFinal)+' บาท';
     el('sumPerDiem').textContent = fmt(perDiemCostFinal)+' บาท';
     el('sumTotal').textContent = fmt(total)+' บาท';
     el('grandTotalInline').textContent = fmt(total)+' บาท';
     el('sumApprovedTravel').textContent = fmt(travelCost)+' บาท';
 
-    return {travelCost, fuelRate, accomCost:accomCostFinal, accomBreakdown, accomNights:nights, accomRooms, perDiemCost:perDiemCostFinal, perDiemBreakdown, total, distance, nights, pdDays};
+    return {travelCost, fuelRate, accomCost:accomCostFinal, accomBreakdown, accomNights:nights, accomRooms, accomType, accomOtherDetail: el('accomOtherDetail').value.trim(), perDiemCost:perDiemCostFinal, perDiemBreakdown, total, distance, nights, pdDays};
   }
 
   // ---------- Trip type: "ไป-กลับ (ไม่ค้างคืน)" vs "ค้างคืน" ----------
@@ -1983,7 +2026,7 @@
   // "ค้างคืน" keeps every section visible, exactly as the form behaved before this feature.
   let tripType = 'overnight'; // 'oneday' | 'overnight'
   function applyTripType(){
-    document.querySelectorAll('.trip-type-btn').forEach(b=> b.classList.toggle('active', b.dataset.trip===tripType));
+    document.querySelectorAll('.trip-type-btn[data-trip]').forEach(b=> b.classList.toggle('active', b.dataset.trip===tripType));
     const isOneDay = tripType === 'oneday';
     el('accomSection').style.display = isOneDay ? 'none' : '';
     el('perDiemSection').style.display = isOneDay ? 'none' : '';
@@ -1997,7 +2040,7 @@
     recalcCosts();
     updateSaveButtonState();
   }
-  document.querySelectorAll('.trip-type-btn').forEach(btn=>{
+  document.querySelectorAll('.trip-type-btn[data-trip]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       tripType = btn.dataset.trip;
       applyTripType();
@@ -2042,6 +2085,8 @@
       accomRooms: c.accomRooms,
       accomBreakdown: c.accomBreakdown,
       accomCost: c.accomCost,
+      accomType: c.accomType,
+      accomOtherDetail: c.accomOtherDetail,
       perDiemDays: c.pdDays,
       perDiemBreakdown: c.perDiemBreakdown,
       perDiemCost: c.perDiemCost,
@@ -2072,7 +2117,8 @@
     if(!rec.gpsDistanceFile) return 'กรุณาแนบรูปภาพระยะทางตาม GPS ก่อนบันทึก';
     if(rec.tripType !== 'oneday'){
       if(!rec.perDiemBreakdown || !rec.perDiemBreakdown.length || rec.perDiemBreakdown.some(b=>!b.rate)) return 'กรุณาเลือกระดับตำแหน่งและพื้นที่ปฏิบัติงานให้ครบทุกคน';
-      if(!rec.accomBreakdown || !rec.accomBreakdown.length || rec.accomBreakdown.some(b=>!b.rate)) return 'กรุณาเลือกระดับตำแหน่งและพื้นที่ที่พักให้ครบทุกห้อง';
+      if(rec.accomType==='rent' && (!rec.accomBreakdown || !rec.accomBreakdown.length || rec.accomBreakdown.some(b=>!b.rate))) return 'กรุณาเลือกระดับตำแหน่งและพื้นที่ที่พักให้ครบทุกห้อง';
+      if(rec.accomType==='other' && !rec.accomOtherDetail) return 'กรุณาระบุรายละเอียดที่พัก (อื่นๆ)';
     }
     if(rec.helperCount>1 && (!rec.helperNames || rec.helperNames.length < rec.helperCount-1)) return 'กรุณากรอกชื่อพนักงานที่เดินทางร่วมให้ครบทุกคน';
     if(!rec.licenseFile) return 'กรุณาแนบรูปหรือไฟล์ใบขับขี่ก่อนบันทึก';
@@ -2112,6 +2158,9 @@
     el('workDays').value='0 วัน'; el('accomNights').value=0; el('perDiemDays').value=0;
     el('remarks').value='';
     el('accomRoomCount').value=1;
+    accomType = 'rent';
+    el('accomOtherDetail').value = '';
+    applyAccomType();
     accomValues = [{level:'lv10', area:'bkk'}];
     renderAccomList();
     perDiemValues = [{level:'lv10', area:'bkk'}];
@@ -2267,6 +2316,12 @@
       : [{level:'lv10', area:'bkk'}];
     el('accomRoomCount').value = accomValues.length;
     renderAccomList();
+    // Backward-compatibility: records saved before this feature only carried the boolean
+    // hasProvidedAccom (true = accommodation already arranged, no cost claimed). Map that
+    // forward to the closest new option ('dc') since the original reason wasn't recorded.
+    accomType = rec.accomType || (rec.hasProvidedAccom ? 'dc' : 'rent');
+    el('accomOtherDetail').value = rec.accomOtherDetail || '';
+    applyAccomType();
 
     perDiemValues = (rec.perDiemBreakdown && rec.perDiemBreakdown.length)
       ? rec.perDiemBreakdown.map(b=>({level:b.level||'lv10', area:b.area||'bkk'}))
@@ -2776,9 +2831,11 @@
       'ค่าน้ำมัน (บาท/กม.)': r.fuelRate,
       'รวมค่าเดินทาง (บาท)': r.travelCost,
       'รวมอนุมัติค่าเดินทาง (เฉพาะค่าเดินทาง) (บาท)': r.approvedTravelCost,
-      'ค่าที่พักแยกตามห้อง': (r.accomBreakdown||[]).map((b,i)=>`ห้องที่${i+1}: ${b.levelLabel}/${b.areaLabel} ${fmt(b.rate)}บาทx${b.nights}คืน=${fmt(b.cost)}บาท`).join('; '),
+      'ประเภทที่พัก': ({rent:'เช่าห้องพัก', dc:'พักที่ DC', other:'อื่นๆ'})[r.accomType] || (r.hasProvidedAccom ? 'พักที่ DC' : 'เช่าห้องพัก'),
+      'รายละเอียดที่พัก (อื่นๆ)': r.accomType==='other' ? (r.accomOtherDetail||'-') : '',
+      'ค่าที่พักแยกตามห้อง': r.accomType!=='rent' ? '-' : (r.accomBreakdown||[]).map((b,i)=>`ห้องที่${i+1}: ${b.levelLabel}/${b.areaLabel} ${fmt(b.rate)}บาทx${b.nights}คืน=${fmt(b.cost)}บาท`).join('; '),
       'จำนวนคืนที่พัก': r.accomNights,
-      'จำนวนห้องพัก (รวม)': r.accomRooms,
+      'จำนวนห้องพัก (รวม)': r.accomType!=='rent' ? '-' : r.accomRooms,
       'รวมค่าที่พัก (บาท)': r.accomCost,
       'เบี้ยเลี้ยงแยกตามผู้เดินทาง': (r.perDiemBreakdown||[]).map((b,i)=>`คนที่${i+1}: ${b.levelLabel}/${b.areaLabel} ${fmt(b.rate)}บาทx${b.days}วัน=${fmt(b.cost)}บาท`).join('; '),
       'จำนวนวันเบี้ยเลี้ยง': r.perDiemDays,
@@ -2840,7 +2897,13 @@
 
       <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px;">
         ${row('ค่าเดินทาง ('+fmt(r.distanceKm)+' กม. × '+fmt(r.fuelRate)+' บาท/กม.'+(r.tripType==='oneday' && r.oneDayTripCount>1 ? ' × '+r.oneDayTripCount+' วัน' : '')+')', fmt(r.travelCost)+' บาท')}
-        ${r.tripType === 'oneday' ? '' : (r.accomBreakdown||[]).map((b,i)=>row('ค่าที่พัก ห้องที่ '+(i+1)+' ('+b.levelLabel+' / '+b.areaLabel+', '+b.nights+' คืน × '+fmt(b.rate)+' บาท)', fmt(b.cost)+' บาท')).join('')}
+        ${(()=>{
+          if(r.tripType === 'oneday') return '';
+          const at = r.accomType || (r.hasProvidedAccom ? 'dc' : 'rent');
+          if(at==='dc') return row('ค่าที่พัก', 'พักที่ DC (ไม่เบิกค่าที่พัก)');
+          if(at==='other') return row('ค่าที่พัก', 'อื่นๆ'+(r.accomOtherDetail ? ' — '+r.accomOtherDetail : '')+' (ไม่เบิกค่าที่พัก)');
+          return (r.accomBreakdown||[]).map((b,i)=>row('ค่าที่พัก ห้องที่ '+(i+1)+' ('+b.levelLabel+' / '+b.areaLabel+', '+b.nights+' คืน × '+fmt(b.rate)+' บาท)', fmt(b.cost)+' บาท')).join('');
+        })()}
         ${r.tripType === 'oneday' ? '' : (r.perDiemBreakdown||[]).map((b,i)=>row('ค่าเบี้ยเลี้ยง คนที่ '+(i+1)+' ('+b.levelLabel+' / '+b.areaLabel+', '+b.days+' วัน × '+fmt(b.rate)+' บาท)', fmt(b.cost)+' บาท')).join('')}
       </table>
 
