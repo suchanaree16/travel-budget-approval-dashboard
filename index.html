@@ -365,9 +365,10 @@
   .app-dialog-msg{font-size:13.5px;color:var(--muted);line-height:1.6;white-space:pre-line;margin-bottom:14px;}
   .app-dialog-input{
     font-family:inherit;font-size:14px;color:var(--ink);border:1.5px solid var(--border);border-radius:9px;
-    padding:9px 11px;background:#fff;width:100%;margin-bottom:16px;
+    padding:9px 11px;background:#fff;width:100%;margin-bottom:4px;resize:vertical;min-height:80px;line-height:1.5;
   }
   .app-dialog-input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(27,111,196,.14);}
+  .app-dialog-input-hint{font-size:11.5px;color:var(--muted);margin-bottom:14px;}
   .app-dialog-btnrow{display:flex;gap:10px;}
   .app-dialog-btnrow .btn{width:auto;flex:1;padding:10px 16px;font-size:13.5px;}
 
@@ -627,6 +628,11 @@
             <div class="field"><label>ชื่อพนักงาน</label><input type="text" id="empName" placeholder="ชื่อ-นามสกุล"></div>
             <div class="field"><label>รหัสพนักงาน</label><input type="text" id="empCode" placeholder="เช่น EMP0012"></div>
             <div class="field"><label>ตำแหน่ง</label><input type="text" id="position" placeholder="ตำแหน่งงาน"></div>
+            <div class="field">
+              <label>อีเมล (สำหรับรับแจ้งผลอนุมัติ)</label>
+              <input type="email" id="empEmail" placeholder="[email protected]">
+              <span class="hint">ระบบจะส่งอีเมลแจ้งเตือนไปยังที่อยู่นี้เมื่อคำขอได้รับการอนุมัติ หรือไม่อนุมัติ</span>
+            </div>
           </div>
         </div>
 
@@ -933,7 +939,8 @@
   <div class="app-dialog-box">
     <div class="app-dialog-title" id="appDialogTitle"></div>
     <div class="app-dialog-msg" id="appDialogMsg"></div>
-    <input type="text" id="appDialogInput" class="app-dialog-input" style="display:none;">
+    <textarea id="appDialogInput" class="app-dialog-input" style="display:none;" rows="3"></textarea>
+    <div class="app-dialog-input-hint" id="appDialogInputHint" style="display:none;"></div>
     <div class="app-dialog-btnrow">
       <button type="button" id="appDialogCancelBtn" class="btn btn-outline">ยกเลิก</button>
       <button type="button" id="appDialogOkBtn" class="btn btn-primary">ตกลง</button>
@@ -1102,6 +1109,7 @@
   // permanently silenced per-page by the browser itself, which made buttons relying on them
   // (like admin unlock) stop working with no visible error. These always render on-page.
   let appDialogResolve = null;
+  let appDialogRequired = false;
   function closeAppDialog(result){
     el('appDialogOverlay').classList.add('hidden');
     const resolve = appDialogResolve;
@@ -1112,33 +1120,50 @@
   el('appDialogOverlay').addEventListener('click', (e)=>{ if(e.target.id==='appDialogOverlay') closeAppDialog(null); });
   el('appDialogOkBtn').addEventListener('click', ()=>{
     const input = el('appDialogInput');
-    if(input.style.display !== 'none'){ closeAppDialog(input.value); }
+    if(input.style.display !== 'none'){
+      const val = input.value.trim();
+      if(appDialogRequired && !val){ toast('กรุณากรอกเหตุผล / หมายเหตุก่อนยืนยัน'); input.focus(); return; }
+      closeAppDialog(input.value);
+    }
     else { closeAppDialog(true); }
   });
-  el('appDialogInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); el('appDialogOkBtn').click(); } });
+  // Enter adds a new line like a normal textarea; use Ctrl+Enter (or Cmd+Enter on Mac) to submit.
+  el('appDialogInput').addEventListener('keydown', (e)=>{
+    if(e.key==='Enter' && (e.ctrlKey||e.metaKey)){ e.preventDefault(); el('appDialogOkBtn').click(); }
+  });
 
   // appConfirm(message, title?) -> Promise<boolean>
   function appConfirm(message, title){
     return new Promise(resolve=>{
       appDialogResolve = (result)=> resolve(result===true);
+      appDialogRequired = false;
       el('appDialogTitle').textContent = title || 'ยืนยันการทำรายการ';
       el('appDialogMsg').textContent = message || '';
       el('appDialogMsg').style.display = message ? '' : 'none';
       el('appDialogInput').style.display = 'none';
+      el('appDialogInputHint').style.display = 'none';
       el('appDialogOkBtn').textContent = 'ยืนยัน';
       el('appDialogOverlay').classList.remove('hidden');
     });
   }
-  // appPrompt(message, defaultValue?, title?) -> Promise<string|null>
-  function appPrompt(message, defaultValue, title){
+  // appPrompt(message, defaultValue?, title?, opts?) -> Promise<string|null>
+  // opts: { placeholder, required, hint }. When required is true, the OK button refuses to
+  // close the dialog until the box has non-whitespace text in it.
+  function appPrompt(message, defaultValue, title, opts){
+    opts = opts || {};
     return new Promise(resolve=>{
       appDialogResolve = (result)=> resolve(result===null ? null : String(result));
+      appDialogRequired = !!opts.required;
       el('appDialogTitle').textContent = title || 'กรอกข้อมูล';
       el('appDialogMsg').textContent = message || '';
       el('appDialogMsg').style.display = message ? '' : 'none';
       const input = el('appDialogInput');
       input.style.display = '';
       input.value = defaultValue || '';
+      input.placeholder = opts.placeholder || '';
+      const hint = el('appDialogInputHint');
+      if(opts.hint){ hint.textContent = opts.hint; hint.style.display = ''; }
+      else { hint.style.display = 'none'; }
       el('appDialogOkBtn').textContent = 'ตกลง';
       el('appDialogOverlay').classList.remove('hidden');
       setTimeout(()=> input.focus(), 30);
@@ -2063,6 +2088,7 @@
       empName: el('empName').value.trim(),
       empCode: el('empCode').value.trim(),
       position: el('position').value.trim(),
+      empEmail: el('empEmail').value.trim(),
       helperCount: Number(el('helperCount').value)||1,
       helperNames,
       purpose,
@@ -2104,6 +2130,8 @@
     if(!rec.empName) return 'กรุณากรอกชื่อพนักงาน';
     if(!rec.empCode) return 'กรุณากรอกรหัสพนักงาน';
     if(!rec.position) return 'กรุณากรอกตำแหน่งงาน';
+    if(!rec.empEmail) return 'กรุณากรอกอีเมลสำหรับรับแจ้งผลอนุมัติ';
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rec.empEmail)) return 'รูปแบบอีเมลไม่ถูกต้อง';
     if(!rec.purpose || /อื่น ๆ: -$/.test(rec.purpose)) return 'กรุณาระบุวัตถุประสงค์การเดินทาง';
     if(rec.tripType === 'oneday'){
       if(!rec.oneDayDates || !rec.oneDayDates.length) return 'กรุณาระบุวันที่เดินทางไป-กลับอย่างน้อย 1 วัน';
@@ -2144,7 +2172,7 @@
   function clearForm(){
     el('fillDate').value = todayStr();
     el('fillDateText').value = isoToThaiDMY(todayStr());
-    ['empName','empCode','position','startPoint','endPoint','distanceKm','purposeOther','vehiclePlate','vehicleBrand'].forEach(id=>el(id).value='');
+    ['empName','empCode','position','empEmail','startPoint','endPoint','distanceKm','purposeOther','vehiclePlate','vehicleBrand'].forEach(id=>el(id).value='');
     el('empPrefix').value = 'นาย';
     el('vehicleType').value = 'รถยนต์ส่วนตัว (รถน้ำมัน)';
     applyFuelRate();
@@ -2264,6 +2292,7 @@
     el('empName').value = rec.empName || '';
     el('empCode').value = rec.empCode || '';
     el('position').value = rec.position || '';
+    el('empEmail').value = rec.empEmail || '';
 
     const total = Math.max(1, Math.floor(Number(rec.helperCount))||1);
     el('helperCount').value = total;
@@ -2590,7 +2619,7 @@
     return slim;
   }
 
-  async function sendToGoogleSheet(rec, filesToUpload){
+  async function sendToGoogleSheet(rec, filesToUpload, notifyDecision){
     if(!GOOGLE_SHEET_WEBAPP_URL || GOOGLE_SHEET_WEBAPP_URL.indexOf('PASTE_YOUR_')===0) return;
     try{
       // Content-Type is deliberately 'text/plain' (not 'application/json'): sending JSON
@@ -2610,6 +2639,13 @@
       // raw JSON, which is what makes attachments viewable from ANY device from now on —
       // previously the image bytes only ever lived in the submitter's own browser storage.
       const body = { display: recordToRow(rec), raw: recordToRawForSheet(rec), approverEmail: APPROVER_EMAIL };
+      // notifyDecision: true only when this send is triggered right after an approve/reject
+      // decision — tells the Apps Script backend to email rec.empEmail (the requester) with
+      // the result, instead of (or in addition to) notifying the approver as on a new request.
+      if(notifyDecision){
+        body.notifyDecision = true;
+        body.requesterEmail = (rec.empEmail||'').trim();
+      }
       if(filesToUpload && (filesToUpload.license || filesToUpload.insurance || filesToUpload.gpsDistance)){
         body.files = filesToUpload;
       }
@@ -2811,6 +2847,7 @@
       'เหตุผลที่ไม่อนุมัติ': r.status==='rejected' ? (r.decisionNote||'-') : '',
       'วันที่กรอกข้อมูล': isoToThaiDMY(r.fillDate) + (r.createdAt ? ' ' + createdAtTime(r.createdAt) + ' น.' : ''),
       'ชื่อพนักงาน': ((r.empPrefix||'')+(r.empName||'')),
+      'อีเมลผู้ขออนุมัติ': r.empEmail || '',
       'รหัสพนักงาน': r.empCode,
       'ตำแหน่ง': r.position,
       'จำนวนพนักงานเดินทางรวม': r.helperCount,
@@ -3164,7 +3201,12 @@
     const label = decision === 'approved' ? 'อนุมัติ' : 'ไม่อนุมัติ';
     let note = '';
     if(decision === 'rejected'){
-      note = await appPrompt('ระบุเหตุผลที่ไม่อนุมัติ (ไม่บังคับ)', '', 'ไม่อนุมัติคำขอ');
+      note = await appPrompt(
+        'เหตุผล / หมายเหตุในการไม่อนุมัติ',
+        '',
+        'ไม่อนุมัติคำขอ',
+        { required: true, placeholder: 'เช่น เอกสารแนบไม่ครบ, งบประมาณเกินกำหนด, ข้อมูลไม่ถูกต้อง ฯลฯ', hint: 'ผู้ขอจะเห็นข้อความนี้ในอีเมลแจ้งผล กรุณาระบุเหตุผลให้ชัดเจน' }
+      );
       if(note === null) return false; // aborted the prompt
     }
     if(!(await appConfirm('', `ยืนยัน${label}คำขอนี้?`))) return false;
@@ -3173,7 +3215,7 @@
       const updated = {...full, status: decision, decidedAt: new Date().toISOString(), decisionNote: (note||'').trim()};
       const result = await saveRecord(updated);
       if(result.ok){
-        sendToGoogleSheet(updated);
+        sendToGoogleSheet(updated, null, true);
         toast(`ทำรายการ${label}เรียบร้อยแล้ว`);
         await refreshOverview();
         return true;
