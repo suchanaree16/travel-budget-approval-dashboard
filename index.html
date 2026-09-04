@@ -823,7 +823,7 @@
                 <div class="field"><label>จำนวนห้องพัก (คำนวณอัตโนมัติ)</label><input type="text" id="accomRoomCount" readonly value="1"></div>
               </div>
               <div class="helper-list" id="accomList" style="margin-top:12px;"></div>
-              <span class="hint">รวมค่าที่พัก = จำนวนคืน × Σ(อัตราค่าที่พักของแต่ละห้อง) · อัตรา: ผู้จัดการ LV.10 กทม./ปริมณฑล = 1,000 บาท · LV.10 พื้นที่อื่น และ LV.9 ลงมา (ทุกพื้นที่) = 800 บาท</span>
+              <span class="hint">รวมค่าที่พัก = จำนวนคืน × Σ(อัตราค่าที่พักของแต่ละห้อง) · อัตรา: 600 บาท/คืน ทุกระดับตำแหน่ง ทุกพื้นที่</span>
             </div>
             <div class="field full" style="margin-top:12px;"><label>รวมค่าที่พัก (คำนวณอัตโนมัติ)</label><input type="text" id="accomCost" readonly value="0.00 บาท"></div>
           </div>
@@ -1666,7 +1666,7 @@
   // One row per traveler counted in "จำนวนพนักงานเดินทางรวม" (section 2), mirroring the
   // per diem list, since each traveler may qualify for a different room rate and may need
   // a different number of rooms.
-  const ACCOM_TABLE = { lv10:{bkk:1000, other:800}, lv39:{bkk:800, other:800} };
+  const ACCOM_TABLE = { lv10:{bkk:600, other:600}, lv39:{bkk:600, other:600} };
   function getAccomRate(v){
     return (ACCOM_TABLE[v.level] && ACCOM_TABLE[v.level][v.area]) || 0;
   }
