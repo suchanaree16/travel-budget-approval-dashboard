@@ -1662,57 +1662,19 @@
     return (PERDIEM_TABLE[v.level] && PERDIEM_TABLE[v.level][v.area]) || 0;
   }
 
-  // ---------- Accommodation rate selection (section 10) ----------
-  // One row per traveler counted in "จำนวนพนักงานเดินทางรวม" (section 2), mirroring the
-  // per diem list, since each traveler may qualify for a different room rate and may need
-  // a different number of rooms.
-  const ACCOM_TABLE = { lv10:{bkk:600, other:600}, lv39:{bkk:600, other:600} };
-  function getAccomRate(v){
-    return (ACCOM_TABLE[v.level] && ACCOM_TABLE[v.level][v.area]) || 0;
-  }
-  let accomValues = [{level:'lv10', area:'bkk'}];
+  // ---------- Accommodation rate (section 10) ----------
+  // Flat rate for every level/area (previously varied by ระดับตำแหน่ง × พื้นที่ปฏิบัติงาน;
+  // simplified to a single constant since the rate is now the same across the board).
+  // The per-room level/area picker was removed — total cost is now just
+  // จำนวนห้องพัก × จำนวนคืน × ACCOM_RATE, so accomList only shows a read-only summary line.
+  const ACCOM_RATE = 600;
   function renderAccomList(){
     const container = el('accomList');
-    const total = Math.max(1, Math.floor(Number(el('accomRoomCount').value)||1));
-    if(total > accomValues.length){
-      while(accomValues.length < total) accomValues.push({level:'lv10', area:'bkk'});
-    } else {
-      accomValues.length = total;
-    }
-    container.innerHTML = accomValues.map((v,i)=>{
-      const label = total>1 ? ('พนักงานคนที่ '+(i+1)) : 'เลือกระดับตำแหน่งและพื้นที่ปฏิบัติงาน';
-      return `
-      <div class="helper-item">
-        <div class="idx">${i+1}</div>
-        <div style="flex:1;">
-          <div style="font-size:12.5px;font-weight:600;color:var(--navy-deep);margin-bottom:6px;">${label}</div>
-          <div class="helper-fields" style="grid-template-columns:1.3fr 1fr 0.9fr;margin-bottom:4px;">
-            <label style="font-size:11px;color:var(--muted);font-weight:600;">ระดับตำแหน่ง</label>
-            <label style="font-size:11px;color:var(--muted);font-weight:600;">พื้นที่ปฏิบัติงาน</label>
-            <label style="font-size:11px;color:var(--muted);font-weight:600;">อัตรา/คืน</label>
-          </div>
-          <div class="helper-fields" style="grid-template-columns:1.3fr 1fr 0.9fr;">
-            <select data-idx="${i}" data-field="level" class="ac-select">
-              <option value="lv10" ${v.level==='lv10'?'selected':''}>ระดับผู้จัดการ (LV.10)</option>
-              <option value="lv39" ${v.level==='lv39'?'selected':''}>LV.9 ลงมา</option>
-            </select>
-            <select data-idx="${i}" data-field="area" class="ac-select">
-              <option value="bkk" ${v.area==='bkk'?'selected':''}>กทม. และปริมณฑล</option>
-              <option value="other" ${v.area==='other'?'selected':''}>พื้นที่อื่น</option>
-            </select>
-            <input type="text" class="ac-rate" readonly value="${fmt(getAccomRate(v))} บ./คืน">
-          </div>
-        </div>
-      </div>`;
-    }).join('');
-    container.querySelectorAll('.ac-select').forEach(sel=>{
-      sel.addEventListener('change', ()=>{
-        const idx = +sel.dataset.idx, field = sel.dataset.field;
-        accomValues[idx][field] = sel.value;
-        renderAccomList();
-        recalcCosts();
-      });
-    });
+    const rooms = Math.max(1, Math.floor(Number(el('accomRoomCount').value)||1));
+    container.innerHTML = `<div style="font-size:12.5px;color:var(--ink);padding:8px 2px;">
+      อัตราค่าที่พัก <strong>${fmt(ACCOM_RATE)} บาท/คืน</strong> (คงที่ทุกระดับตำแหน่ง ทุกพื้นที่) ×
+      ${rooms} ห้อง
+    </div>`;
   }
   // ---------- Automatic room count by gender (section 10) ----------
   // จำนวนห้องพัก is fully system-calculated and not user-editable (field is readonly).
@@ -1997,15 +1959,10 @@
     el('echoTravelCost').textContent = fmt(travelCost)+' บาท';
 
     const nights = Number(el('accomNights').value)||0;
-    const accomBreakdown = accomValues.map(v=>{
-      const rate = getAccomRate(v);
-      return {
-        level: v.level, area: v.area,
-        levelLabel: v.level==='lv10' ? 'ระดับผู้จัดการ (LV.10)' : 'LV.9 ลงมา',
-        areaLabel: v.area==='bkk' ? 'กทม. และปริมณฑล' : 'พื้นที่อื่น',
-        rate, nights, cost: rate*nights
-      };
-    });
+    const accomRoomsCount = Math.max(1, Math.floor(Number(el('accomRoomCount').value)||1));
+    const accomBreakdown = Array.from({length: accomRoomsCount}, (_,i)=>({
+      room: i+1, rate: ACCOM_RATE, nights, cost: ACCOM_RATE*nights
+    }));
     const accomCost = accomBreakdown.reduce((sum,b)=>sum+b.cost,0);
     const accomRooms = accomBreakdown.length;
 
@@ -2145,7 +2102,7 @@
     if(!rec.gpsDistanceFile) return 'กรุณาแนบรูปภาพระยะทางตาม GPS ก่อนบันทึก';
     if(rec.tripType !== 'oneday'){
       if(!rec.perDiemBreakdown || !rec.perDiemBreakdown.length || rec.perDiemBreakdown.some(b=>!b.rate)) return 'กรุณาเลือกระดับตำแหน่งและพื้นที่ปฏิบัติงานให้ครบทุกคน';
-      if(rec.accomType==='rent' && (!rec.accomBreakdown || !rec.accomBreakdown.length || rec.accomBreakdown.some(b=>!b.rate))) return 'กรุณาเลือกระดับตำแหน่งและพื้นที่ที่พักให้ครบทุกห้อง';
+      if(rec.accomType==='rent' && (!rec.accomBreakdown || !rec.accomBreakdown.length || rec.accomBreakdown.some(b=>!b.rate))) return 'ไม่พบข้อมูลจำนวนห้องพัก กรุณาตรวจสอบข้อมูลค่าที่พัก';
       if(rec.accomType==='other' && !rec.accomOtherDetail) return 'กรุณาระบุรายละเอียดที่พัก (อื่นๆ)';
     }
     if(rec.helperCount>1 && (!rec.helperNames || rec.helperNames.length < rec.helperCount-1)) return 'กรุณากรอกชื่อพนักงานที่เดินทางร่วมให้ครบทุกคน';
@@ -2189,7 +2146,6 @@
     accomType = 'rent';
     el('accomOtherDetail').value = '';
     applyAccomType();
-    accomValues = [{level:'lv10', area:'bkk'}];
     renderAccomList();
     perDiemValues = [{level:'lv10', area:'bkk'}];
     renderPerDiemList();
@@ -2340,10 +2296,7 @@
     el('endPoint').value = rec.endPoint || '';
     el('distanceKm').value = rec.distanceKm ? (Number(rec.distanceKm)/2) : '';
 
-    accomValues = (rec.accomBreakdown && rec.accomBreakdown.length)
-      ? rec.accomBreakdown.map(b=>({level:b.level||'lv10', area:b.area||'bkk'}))
-      : [{level:'lv10', area:'bkk'}];
-    el('accomRoomCount').value = accomValues.length;
+    el('accomRoomCount').value = rec.accomRooms || (rec.accomBreakdown && rec.accomBreakdown.length) || 1;
     renderAccomList();
     // Backward-compatibility: records saved before this feature only carried the boolean
     // hasProvidedAccom (true = accommodation already arranged, no cost claimed). Map that
@@ -2870,7 +2823,7 @@
       'รวมอนุมัติค่าเดินทาง (เฉพาะค่าเดินทาง) (บาท)': r.approvedTravelCost,
       'ประเภทที่พัก': ({rent:'เช่าห้องพัก', dc:'พักที่ DC', other:'อื่นๆ'})[r.accomType] || (r.hasProvidedAccom ? 'พักที่ DC' : 'เช่าห้องพัก'),
       'รายละเอียดที่พัก (อื่นๆ)': r.accomType==='other' ? (r.accomOtherDetail||'-') : '',
-      'ค่าที่พักแยกตามห้อง': r.accomType!=='rent' ? '-' : (r.accomBreakdown||[]).map((b,i)=>`ห้องที่${i+1}: ${b.levelLabel}/${b.areaLabel} ${fmt(b.rate)}บาทx${b.nights}คืน=${fmt(b.cost)}บาท`).join('; '),
+      'ค่าที่พักแยกตามห้อง': r.accomType!=='rent' ? '-' : (r.accomBreakdown||[]).map((b,i)=>`ห้องที่${i+1}: ${fmt(b.rate)}บาทx${b.nights}คืน=${fmt(b.cost)}บาท`).join('; '),
       'จำนวนคืนที่พัก': r.accomNights,
       'จำนวนห้องพัก (รวม)': r.accomType!=='rent' ? '-' : r.accomRooms,
       'รวมค่าที่พัก (บาท)': r.accomCost,
@@ -2939,7 +2892,7 @@
           const at = r.accomType || (r.hasProvidedAccom ? 'dc' : 'rent');
           if(at==='dc') return row('ค่าที่พัก', 'พักที่ DC (ไม่เบิกค่าที่พัก)');
           if(at==='other') return row('ค่าที่พัก', 'อื่นๆ'+(r.accomOtherDetail ? ' — '+r.accomOtherDetail : '')+' (ไม่เบิกค่าที่พัก)');
-          return (r.accomBreakdown||[]).map((b,i)=>row('ค่าที่พัก ห้องที่ '+(i+1)+' ('+b.levelLabel+' / '+b.areaLabel+', '+b.nights+' คืน × '+fmt(b.rate)+' บาท)', fmt(b.cost)+' บาท')).join('');
+          return (r.accomBreakdown||[]).map((b,i)=>row('ค่าที่พัก ห้องที่ '+(i+1)+' ('+b.nights+' คืน × '+fmt(b.rate)+' บาท)', fmt(b.cost)+' บาท')).join('');
         })()}
         ${r.tripType === 'oneday' ? '' : (r.perDiemBreakdown||[]).map((b,i)=>row('ค่าเบี้ยเลี้ยง คนที่ '+(i+1)+' ('+b.levelLabel+' / '+b.areaLabel+', '+b.days+' วัน × '+fmt(b.rate)+' บาท)', fmt(b.cost)+' บาท')).join('')}
       </table>
